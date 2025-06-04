@@ -1,6 +1,9 @@
 {
-  "orgName": "Apple company",
+  "orgName": "dev",
   "edition": "Developer",
+  "username": "alberto.mata@metasintaxis-scratch-01.dev",
+  "adminEmail": "alberto.mata@metasintaxis.com",
+  "description": "Scratch org for development purposes",
   "features": ["EnableSetPasswordInApi"],
   "settings": {
     "lightningExperienceSettings": {
