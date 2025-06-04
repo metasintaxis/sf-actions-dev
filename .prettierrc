@@ -1,6 +1,10 @@
 {
+  "useTabs": true,
+  "tabWidth": 8,
+  "singleQuote": true,
   "trailingComma": "none",
   "plugins": [
+    "prettier-plugin-sh",
     "prettier-plugin-apex",
     "@prettier/plugin-xml"
   ],
