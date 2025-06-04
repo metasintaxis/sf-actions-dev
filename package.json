@@ -1,8 +1,8 @@
 {
-  "name": "salesforce-app",
+  "name": "sf-actions-dev",
   "private": true,
-  "version": "1.0.0",
-  "description": "Salesforce App",
+  "version": "0.0.1",
+  "description": "Repository to store GitHub actions and automation scripts to work with salesforce instances.",
   "scripts": {
     "lint": "eslint **/{aura,lwc}/**/*.js",
     "test": "npm run test:unit",
