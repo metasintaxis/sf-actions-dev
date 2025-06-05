@@ -1,12 +1,17 @@
 #!/bin/bash
 
 # -----------------------------------------------------------------------------
-# @file metadata-api-find-metadata-dependencies.sh
+# @file scripts/find-metadata-dependencies/bash/main.sh
 # @brief Find dependencies for a Salesforce metadata component using SOQL.
 #
+# @description
+#   This script retrieves dependencies for a specified Salesforce metadata component
+#   using the Salesforce CLI and outputs the result in JSON or human-readable format.
+#   It is designed for use in CI/CD pipelines and supports robust error handling.
+#
 # @usage
-#   ./metadata-api-find-metadata-dependencies.sh -o OBJECT [-n NAME] [-d DEVELOPER_NAME] [-m MASTER_LABEL] [--json]
-#   ./metadata-api-find-metadata-dependencies.sh --object OBJECT [--name NAME] [--developer-name DEVELOPER_NAME] [--master-label MASTER_LABEL] [--json]
+#   ./main.sh -o OBJECT [-n NAME] [-d DEVELOPER_NAME] [-m MASTER_LABEL] [--json]
+#   ./main.sh --object OBJECT [--name NAME] [--developer-name DEVELOPER_NAME] [--master-label MASTER_LABEL] [--json]
 #
 # @options
 #   -o, --object           The sObject type (e.g., FlowDefinition, ApexClass, etc.) (required)
@@ -18,7 +23,7 @@
 #
 # @exitcodes
 #   0  Success
-#   1  Missing required arguments or invalid usage
+#   1  Missing required arguments, invalid usage, or error during execution
 # -----------------------------------------------------------------------------
 
 set -euo pipefail
