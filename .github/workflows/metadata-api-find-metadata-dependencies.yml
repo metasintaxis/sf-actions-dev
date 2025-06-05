@@ -116,7 +116,7 @@ jobs:
         shell: bash
         continue-on-error: true
         run: |
-          chmod +x ./scripts/bash/metadata/metadata-api-find-metadata-dependencies.sh
+          chmod +x ./scripts/find-metadata-dependencies/bash/main.sh
           SEARCH_FIELD="${{ github.event.inputs.search_field }}"
           COMPONENT_TYPE="${{ github.event.inputs.component_type }}"
           COMPONENT_NAME="${{ github.event.inputs.component_name }}"
@@ -130,13 +130,13 @@ jobs:
             echo "❌ Unsupported search_field: $SEARCH_FIELD"
             exit 1
           fi
-          ./scripts/bash/metadata/metadata-api-find-metadata-dependencies.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies.json
+          ./scripts/find-metadata-dependencies/bash/main.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies-report.json
 
       - name: Check for Script Errors and Fail if Present
         id: check-errors
         shell: bash
         run: |
-          if jq -e '.success == false' dependencies.json > /dev/null; then
+          if jq -e '.success == false' dependencies-report.json > /dev/null; then
             echo "error=true" >> $GITHUB_OUTPUT
           else
             echo "error=false" >> $GITHUB_OUTPUT
@@ -145,20 +145,17 @@ jobs:
       - name: Summarize Metadata Dependencies in GitHub Summary (if no error)
         if: steps.check-errors.outputs.error == 'false'
         run: |
-          node scripts/js/metadata/metadata-api-find-metadata-dependencies.js dependencies.json
+          node scripts/find-metadata-dependencies/js/summary.js dependencies-report.json
         env:
           GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
 
       - name: Summarize Error in GitHub Summary (if error)
         if: steps.check-errors.outputs.error == 'true'
         run: |
-          node scripts/js/metadata/error/metadata-api-find-metadata-dependencies.js dependencies.json
+          node scripts/find-metadata-dependencies/js/error-summary.js dependencies-report.json
           exit 1
         env:
           GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
-
-      - name: Report Dependencies Output (keep only JSON)
-        run: cp dependencies.json dependencies-report.json
 
       - name: Upload dependencies artifact
         uses: actions/upload-artifact@v4
