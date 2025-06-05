@@ -114,7 +114,6 @@ jobs:
       - name: Run metadata-api-find-metadata-dependencies.sh
         id: find-deps
         shell: bash
-        continue-on-error: true
         run: |
           chmod +x ./scripts/bash/metadata/metadata-api-find-metadata-dependencies.sh
           SEARCH_FIELD="${{ github.event.inputs.search_field }}"
@@ -141,12 +140,13 @@ jobs:
         run: |
           if jq -e '.success == false' dependencies.json > /dev/null; then
             echo "error=true" >> $GITHUB_OUTPUT
+            exit 1
           else
             echo "error=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Summarize Error in GitHub Summary (if error)
-        if: steps.check-errors.outputs.error == 'true'
+        if: always()  # Always run, even if previous step failed
         run: |
           node scripts/js/metadata/error/metadata-api-find-metadata-dependencies.js dependencies.json
         env:
@@ -166,5 +166,5 @@ jobs:
       - name: Upload dependencies artifact
         uses: actions/upload-artifact@v4
         with:
-          name: metadata-dependencies
+          name: Dependencies Report
           path: dependencies-report.json
