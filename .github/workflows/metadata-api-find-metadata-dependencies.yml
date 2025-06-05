@@ -3,21 +3,16 @@
 # @brief GitHub Actions workflow to find Salesforce metadata dependencies.
 #
 # @description
-#   This workflow allows users to find dependencies for a Salesforce metadata
-#   component using the Salesforce CLI and a custom Bash script. It supports
-#   dynamic environment selection based on the branch, robust error handling,
-#   and outputs results as both artifacts and GitHub summary tables.
+#   This workflow finds dependencies for a Salesforce metadata component using
+#   the Salesforce CLI and a custom Bash script. It supports dynamic environment
+#   selection, robust error handling, and outputs results as both artifacts and
+#   GitHub summary tables.
 #
 # @usage
 #   Trigger manually via GitHub Actions workflow_dispatch with:
 #     - search_field: Field to search (e.g., Name, DeveloperName, MasterLabel)
 #     - component_name: Name of the metadata component (e.g., MyApexClass)
 #     - component_type: Type of the metadata component (e.g., ApexClass)
-#
-# @jobs
-#   set-target-env: Determines the target environment based on branch.
-#   find-dependencies: Authenticates, runs the dependency script, uploads results,
-#                      and summarizes output.
 #
 # @requirements
 #   - Salesforce CLI
@@ -39,6 +34,7 @@ on:
         description: 'Field to search in the metadata component (e.g., Name, DeveloperName, MasterLabel)'
         required: true
         type: string
+        default: 'Name'
       component_name:
         description: 'Name of the metadata component to search for (e.g., MyApexClass)'
         required: true
@@ -79,6 +75,7 @@ jobs:
           else 
             echo 'env=DEV' >> $GITHUB_OUTPUT
           fi
+
   find-dependencies:
     needs: set-target-env
     name: Find Metadata Dependencies
@@ -161,8 +158,7 @@ jobs:
           GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
 
       - name: Report Dependencies Output (keep only JSON)
-        run: |
-          cp dependencies.json dependencies-report.json
+        run: cp dependencies.json dependencies-report.json
 
       - name: Upload dependencies artifact
         uses: actions/upload-artifact@v4
