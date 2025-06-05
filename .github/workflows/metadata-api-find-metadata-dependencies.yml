@@ -132,14 +132,32 @@ jobs:
           fi
           ./scripts/bash/metadata/metadata-api-find-metadata-dependencies.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies.json
 
+      - name: Install Node.js dependencies for Summary Script
+        run: npm install @actions/core
+
       - name: Check for Script Errors and Fail if Present
+        id: check-errors
         shell: bash
         run: |
           if jq -e '.success == false' dependencies.json > /dev/null; then
-            echo "❌ Error detected by metadata-api-find-metadata-dependencies.sh:"
-            cat dependencies.json
-            exit 1
+            echo "error=true" >> $GITHUB_OUTPUT
+          else
+            echo "error=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Summarize Error in GitHub Summary (if error)
+        if: steps.check-errors.outputs.error == 'true'
+        run: |
+          node scripts/js/metadata/metadata-api-find-metadata-dependencies-error-summary.js dependencies.json
+        env:
+          GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
+
+      - name: Summarize Metadata Dependencies in GitHub Summary (if no error)
+        if: steps.check-errors.outputs.error == 'false'
+        run: |
+          node scripts/js/metadata/metadata-api-find-metadata-dependencies.js dependencies.json
+        env:
+          GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
 
       - name: Report Dependencies Output (keep only JSON)
         run: |
@@ -150,12 +168,3 @@ jobs:
         with:
           name: metadata-dependencies
           path: dependencies-report.json
-
-      - name: Install Node.js dependencies for Summary Script
-        run: npm install @actions/core
-
-      - name: Summarize Metadata Dependencies in GitHub Summary
-        run: |
-          node scripts/js/metadata/metadata-api-find-metadata-dependencies.js dependencies-report.json
-        env:
-          GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
