@@ -44,6 +44,8 @@ jobs:
             echo 'env=PROD' >> $GITHUB_OUTPUT
           elif [ '${{ github.ref }}' = 'refs/heads/main' ]; then
             echo 'env=PROD' >> $GITHUB_OUTPUT
+          else 
+            echo 'env=DEV' >> $GITHUB_OUTPUT
           fi
   find-dependencies:
     needs: set-target-env
