@@ -156,6 +156,6 @@ jobs:
 
       - name: Summarize Metadata Dependencies in GitHub Summary
         run: |
-          node scripts/js/metadata-api-find-metadata-dependencies.js dependencies-report.json
+          node scripts/js/metadata/metadata-api-find-metadata-dependencies.js dependencies-report.json
         env:
           GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
