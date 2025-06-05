@@ -2,6 +2,10 @@
  * @file metadata-api-find-metadata-dependencies.js
  * @brief Summarizes Salesforce metadata dependencies as a GitHub Actions summary table.
  *
+ * @description
+ *   Reads a JSON file produced by the dependency Bash script, extracts dependency information,
+ *   and writes a formatted summary table to the GitHub Actions summary using @actions/core.
+ *
  * @usage
  *   node metadata-api-find-metadata-dependencies.js <dependencies-report.json>
  */
