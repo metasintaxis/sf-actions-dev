@@ -121,9 +121,9 @@ jobs:
 
       - name: Install Node.js dependencies for Summary Script
         run: npm install @actions/core
-
+      
       - name: Summarize Metadata Dependencies in GitHub Summary
         run: |
-          node scripts/devops/js/metadata-api-find-metadata-dependencies-summary.js dependencies-report.json
+          node scripts/js/metadata-api-find-metadata-dependencies.js dependencies-report.json
         env:
           GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
