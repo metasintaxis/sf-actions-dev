@@ -1,129 +1,161 @@
+# -----------------------------------------------------------------------------
+# @file .github/workflows/metadata-api-find-metadata-dependencies.yml
+# @brief GitHub Actions workflow to find Salesforce metadata dependencies.
+#
+# @description
+#   This workflow allows users to find dependencies for a Salesforce metadata
+#   component using the Salesforce CLI and a custom Bash script. It supports
+#   dynamic environment selection based on the branch, robust error handling,
+#   and outputs results as both artifacts and GitHub summary tables.
+#
+# @usage
+#   Trigger manually via GitHub Actions workflow_dispatch with:
+#     - search_field: Field to search (e.g., Name, DeveloperName, MasterLabel)
+#     - component_name: Name of the metadata component (e.g., MyApexClass)
+#     - component_type: Type of the metadata component (e.g., ApexClass)
+#
+# @jobs
+#   set-target-env: Determines the target environment based on branch.
+#   find-dependencies: Authenticates, runs the dependency script, uploads results,
+#                      and summarizes output.
+#
+# @requirements
+#   - Salesforce CLI
+#   - jq
+#   - Node.js (for summary script)
+#   - SFDX_SANDBOX_AUTH_URL secret
+#
+# @outputs
+#   - dependencies-report.json artifact
+#   - GitHub Actions summary table
+# -----------------------------------------------------------------------------
+
 name: 'Metadata API: Find Metadata Dependencies'
 
 on:
-        workflow_dispatch:
-                inputs:
-                        search_field:
-                                description: 'Field to search in the metadata component (e.g., Name, DeveloperName, MasterLabel)'
-                                required: true
-                                type: string
-                        component_name:
-                                description: 'Name of the metadata component to search for (e.g., MyApexClass)'
-                                required: true
-                                type: string
-                        component_type:
-                                description: 'Type of the metadata component (e.g., ApexClass, CustomObject)'
-                                required: true
-                                type: string
+  workflow_dispatch:
+    inputs:
+      search_field:
+        description: 'Field to search in the metadata component (e.g., Name, DeveloperName, MasterLabel)'
+        required: true
+        type: string
+      component_name:
+        description: 'Name of the metadata component to search for (e.g., MyApexClass)'
+        required: true
+        type: string
+      component_type:
+        description: 'Type of the metadata component (e.g., ApexClass, CustomObject)'
+        required: true
+        type: string
 
 run-name: 'Find Metadata Dependencies for ${{ github.event.inputs.component_name }} of type ${{ github.event.inputs.component_type }}'
 
 jobs:
-        set-target-env:
-                name: Set Target Environment
-                runs-on: ubuntu-latest
-                outputs:
-                        target_env: ${{ steps.set_env.outputs.env }}
-                steps:
-                        - name: Set environment
-                          id: set_env
-                          run: |
-                                  if [ '${{ github.ref }}' = 'refs/heads/dev' ]; then
-                                    echo 'env=DEV' >> $GITHUB_OUTPUT
-                                  elif [ '${{ github.ref }}' = 'refs/heads/devops/actions' ]; then
-                                    echo 'env=DEV' >> $GITHUB_OUTPUT
-                                  elif [ '${{ github.ref }}' = 'refs/heads/devops/actions-test' ]; then
-                                    echo 'env=DEV' >> $GITHUB_OUTPUT
-                                  elif [ '${{ github.ref }}' = 'refs/heads/qa' ]; then
-                                    echo 'env=QA' >> $GITHUB_OUTPUT
-                                  elif [ '${{ github.ref }}' = 'refs/heads/uat' ]; then
-                                    echo 'env=UAT' >> $GITHUB_OUTPUT
-                                  elif [ '${{ github.ref }}' = 'refs/heads/preprod' ]; then
-                                    echo 'env=PREPROD' >> $GITHUB_OUTPUT
-                                  elif [ '${{ github.ref }}' = 'refs/heads/prod' ]; then
-                                    echo 'env=PROD' >> $GITHUB_OUTPUT
-                                  elif [ '${{ github.ref }}' = 'refs/heads/main' ]; then
-                                    echo 'env=PROD' >> $GITHUB_OUTPUT
-                                  else 
-                                    echo 'env=DEV' >> $GITHUB_OUTPUT
-                                  fi
-        find-dependencies:
-                needs: set-target-env
-                name: Find Metadata Dependencies
-                runs-on: ubuntu-latest
-                environment:
-                        name: ${{ needs.set-target-env.outputs.target_env }}
-                steps:
-                        - name: Checkout Source Code
-                          uses: actions/checkout@v4
-                          with:
-                                  fetch-depth: 0
+  set-target-env:
+    name: Set Target Environment
+    runs-on: ubuntu-latest
+    outputs:
+      target_env: ${{ steps.set_env.outputs.env }}
+    steps:
+      - name: Set environment
+        id: set_env
+        run: |
+          if [ '${{ github.ref }}' = 'refs/heads/dev' ]; then
+            echo 'env=DEV' >> $GITHUB_OUTPUT
+          elif [ '${{ github.ref }}' = 'refs/heads/devops/actions' ]; then
+            echo 'env=DEV' >> $GITHUB_OUTPUT
+          elif [ '${{ github.ref }}' = 'refs/heads/devops/actions-test' ]; then
+            echo 'env=DEV' >> $GITHUB_OUTPUT
+          elif [ '${{ github.ref }}' = 'refs/heads/qa' ]; then
+            echo 'env=QA' >> $GITHUB_OUTPUT
+          elif [ '${{ github.ref }}' = 'refs/heads/uat' ]; then
+            echo 'env=UAT' >> $GITHUB_OUTPUT
+          elif [ '${{ github.ref }}' = 'refs/heads/preprod' ]; then
+            echo 'env=PREPROD' >> $GITHUB_OUTPUT
+          elif [ '${{ github.ref }}' = 'refs/heads/prod' ]; then
+            echo 'env=PROD' >> $GITHUB_OUTPUT
+          elif [ '${{ github.ref }}' = 'refs/heads/main' ]; then
+            echo 'env=PROD' >> $GITHUB_OUTPUT
+          else 
+            echo 'env=DEV' >> $GITHUB_OUTPUT
+          fi
+  find-dependencies:
+    needs: set-target-env
+    name: Find Metadata Dependencies
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.set-target-env.outputs.target_env }}
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-                        - name: Install Salesforce CLI
-                          run: npm install -g @salesforce/cli@latest
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
 
-                        - name: Populate auth file with SFDX_URL secret of the integration orgs
-                          shell: bash
-                          run: |
-                                  set -o noclobber
-                                  umask 077
-                                  echo '${{ secrets.SFDX_SANDBOX_AUTH_URL }}' > ./sfdc_auth_url.json
+      - name: Populate auth file with SFDX_URL secret of the integration orgs
+        shell: bash
+        run: |
+          set -o noclobber
+          umask 077
+          echo '${{ secrets.SFDX_SANDBOX_AUTH_URL }}' > ./sfdc_auth_url.json
 
-                        - name: Authenticate to Sandbox Org
-                          run: sf org login sfdx-url --sfdx-url-file ./sfdc_auth_url.json --set-default
+      - name: Authenticate to Sandbox Org
+        run: sf org login sfdx-url --sfdx-url-file ./sfdc_auth_url.json --set-default
 
-                        - name: Validate Inputs
-                          run: |
-                                  if [[ -z "${{ github.event.inputs.component_name }}" || -z "${{ github.event.inputs.component_type }}" || -z "${{ github.event.inputs.search_field }}" ]]; then
-                                    echo "❌ Some arguments are missing."
-                                    exit 1
-                                  fi
+      - name: Validate Inputs
+        run: |
+          if [[ -z "${{ github.event.inputs.component_name }}" || -z "${{ github.event.inputs.component_type }}" || -z "${{ github.event.inputs.search_field }}" ]]; then
+            echo "❌ Some arguments are missing."
+            exit 1
+          fi
 
-                        - name: Run metadata-api-find-metadata-dependencies.sh
-                          id: find-deps
-                          shell: bash
-                          continue-on-error: true
-                          run: |
-                                  chmod +x ./scripts/bash/metadata/metadata-api-find-metadata-dependencies.sh
-                                  SEARCH_FIELD="${{ github.event.inputs.search_field }}"
-                                  COMPONENT_TYPE="${{ github.event.inputs.component_type }}"
-                                  COMPONENT_NAME="${{ github.event.inputs.component_name }}"
-                                  if [ "$SEARCH_FIELD" = "Name" ]; then
-                                    FLAG="-n"
-                                  elif [ "$SEARCH_FIELD" = "DeveloperName" ]; then
-                                    FLAG="--developer-name"
-                                  elif [ "$SEARCH_FIELD" = "MasterLabel" ]; then
-                                    FLAG="--master-label"
-                                  else
-                                    echo "❌ Unsupported search_field: $SEARCH_FIELD"
-                                    exit 1
-                                  fi
-                                  ./scripts/bash/metadata/metadata-api-find-metadata-dependencies.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies.json
+      - name: Run metadata-api-find-metadata-dependencies.sh
+        id: find-deps
+        shell: bash
+        continue-on-error: true
+        run: |
+          chmod +x ./scripts/bash/metadata/metadata-api-find-metadata-dependencies.sh
+          SEARCH_FIELD="${{ github.event.inputs.search_field }}"
+          COMPONENT_TYPE="${{ github.event.inputs.component_type }}"
+          COMPONENT_NAME="${{ github.event.inputs.component_name }}"
+          if [ "$SEARCH_FIELD" = "Name" ]; then
+            FLAG="-n"
+          elif [ "$SEARCH_FIELD" = "DeveloperName" ]; then
+            FLAG="--developer-name"
+          elif [ "$SEARCH_FIELD" = "MasterLabel" ]; then
+            FLAG="--master-label"
+          else
+            echo "❌ Unsupported search_field: $SEARCH_FIELD"
+            exit 1
+          fi
+          ./scripts/bash/metadata/metadata-api-find-metadata-dependencies.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies.json
 
-                        - name: Check for Script Errors and Fail if Present
-                          shell: bash
-                          run: |
-                                  if jq -e '.success == false' dependencies.json > /dev/null; then
-                                    echo "❌ Error detected by metadata-api-find-metadata-dependencies.sh:"
-                                    cat dependencies.json
-                                    exit 1
-                                  fi
+      - name: Check for Script Errors and Fail if Present
+        shell: bash
+        run: |
+          if jq -e '.success == false' dependencies.json > /dev/null; then
+            echo "❌ Error detected by metadata-api-find-metadata-dependencies.sh:"
+            cat dependencies.json
+            exit 1
+          fi
 
-                        - name: Report Dependencies Output (keep only JSON)
-                          run: |
-                                  cp dependencies.json dependencies-report.json
+      - name: Report Dependencies Output (keep only JSON)
+        run: |
+          cp dependencies.json dependencies-report.json
 
-                        - name: Upload dependencies artifact
-                          uses: actions/upload-artifact@v4
-                          with:
-                                  name: metadata-dependencies
-                                  path: dependencies-report.json
+      - name: Upload dependencies artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: metadata-dependencies
+          path: dependencies-report.json
 
-                        - name: Install Node.js dependencies for Summary Script
-                          run: npm install @actions/core
+      - name: Install Node.js dependencies for Summary Script
+        run: npm install @actions/core
 
-                        - name: Summarize Metadata Dependencies in GitHub Summary
-                          run: |
-                                  node scripts/js/metadata-api-find-metadata-dependencies.js dependencies-report.json
-                          env:
-                                  GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
+      - name: Summarize Metadata Dependencies in GitHub Summary
+        run: |
+          node scripts/js/metadata-api-find-metadata-dependencies.js dependencies-report.json
+        env:
+          GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
