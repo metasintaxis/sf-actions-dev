@@ -238,7 +238,7 @@ main() {
 
 	local COMPONENT_ID
 	if ! COMPONENT_ID=$(resolve_component_id "$OBJECT" "$SEARCH_FIELD" "$SEARCH_VALUE" 2>&1); then
-		handle_component_id_error "$COMPONENT_ID"
+		handle_component_id_error "Id: $COMPONENT_ID"
 		exit 1
 	fi
 

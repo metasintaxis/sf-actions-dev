@@ -10,30 +10,30 @@ import fs from 'fs';
 import * as core from '@actions/core';
 
 function summarizeError(filePath) {
-  const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  const error = data.error || {};
-  const code = error.code || 'UNKNOWN_ERROR';
-  const message = error.message || 'No error message provided.';
-  const details = error.details || '';
+	const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+	const error = data.error || {};
+	const code = error.code || 'UNKNOWN_ERROR';
+	const message = error.message || 'No error message provided.';
+	const details = error.details || '';
 
-  let summary = `❌ **Dependency Script Failed**\n\n`;
-  summary += `**Error Code:** \`${code}\`\n\n`;
-  summary += `**Message:** ${message}\n\n`;
-  if (details) {
-    summary += `**Details:**\n\n\`\`\`\n${details}\n\`\`\`\n`;
-  }
+	let summary = `❌ **Dependency Script Failed**\n\n`;
+	summary += `**Error Code:** \`${code}\`\n\n`;
+	summary += `**Message:** ${message}\n\n`;
+	if (details) {
+		summary += `**Details:**\n\n\`\`\`\n${details}\n\`\`\`\n`;
+	}
 
-  return summary;
+	return summary;
 }
 
 const filePath = process.argv[2];
 if (!filePath) {
-  core.setFailed('No input file specified.');
-  process.exit(1);
+	core.setFailed('No input file specified.');
+	process.exit(1);
 }
 if (!fs.existsSync(filePath)) {
-  core.setFailed(`File not found: ${filePath}`);
-  process.exit(1);
+	core.setFailed(`File not found: ${filePath}`);
+	process.exit(1);
 }
 
 const summary = summarizeError(filePath);
