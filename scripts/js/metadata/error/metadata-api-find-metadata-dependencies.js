@@ -46,7 +46,7 @@ export function formatErrorTable(error) {
  */
 export async function writeErrorSummary(error) {
 	await core.summary
-		.addHeading('❌ Dependency Script Failed')
+		.addHeading('Dependency Script Error Report')
 		.addTable(formatErrorTable(error))
 		.write();
 }
