@@ -148,7 +148,7 @@ jobs:
       - name: Summarize Error in GitHub Summary (if error)
         if: steps.check-errors.outputs.error == 'true'
         run: |
-          node scripts/js/metadata/metadata-api-find-metadata-dependencies-error-summary.js dependencies.json
+          node scripts/js/metadata/error/metadata-api-find-metadata-dependencies.js dependencies.json
         env:
           GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
 
