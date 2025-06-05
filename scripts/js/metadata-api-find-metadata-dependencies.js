@@ -6,7 +6,7 @@ const readDependencies = (filePath) => {
 };
 
 const buildDependencyTableData = (dependencies) => {
-  const records = dependencies.result.records || [];
+  const records = dependencies.result.result.records || [];
   const tableHeader = [
     { data: "Source Name", header: true },
     { data: "Source Type", header: true },
