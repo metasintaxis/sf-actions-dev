@@ -29,45 +29,13 @@
 
 set -euo pipefail
 
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/output-utils.sh"
+
 TARGET_ORG=""
 JSON_OUTPUT=false
 SFDX_AUTH_URL_CONDENSED=false
-
-print_json_error() {
-	local code="$1"
-	local message="$2"
-	local details="${3:-}"
-	echo -n '{'
-	echo -n "\"success\": false, \"error\": {\"code\": \"$code\", \"message\": \"$message\""
-	if [ -n "$details" ]; then
-		echo -n ", \"details\": \"$details\""
-	fi
-	echo '}}'
-}
-
-print_json_success() {
-	local result="$1"
-	echo -n '{'
-	echo -n "\"success\": true, \"result\": $result"
-	echo '}'
-}
-
-print_human_readable_success() {
-	# Assumes $FINAL_JSON contains the JSON output
-	local org_id
-	local username
-	local instance_url
-	local login_url
-	org_id=$(echo "$FINAL_JSON" | jq -r '.result.id // empty')
-	username=$(echo "$FINAL_JSON" | jq -r '.result.username // empty')
-	instance_url=$(echo "$FINAL_JSON" | jq -r '.result.instanceUrl // empty')
-	login_url=$(echo "$FINAL_JSON" | jq -r '.result.loginUrl // empty')
-	echo "Org authentication info retrieved successfully!"
-	[ -n "$org_id" ] && echo "Org ID: $org_id"
-	[ -n "$username" ] && echo "Username: $username"
-	[ -n "$instance_url" ] && echo "Instance URL: $instance_url"
-	[ -n "$login_url" ] && echo "Login URL: $login_url"
-}
 
 show_usage() {
 	echo "Usage:"
@@ -114,20 +82,24 @@ parse_args() {
 check_dependencies() {
 	if ! command -v jq > /dev/null 2>&1; then
 		local msg="Error: jq is required but not installed."
+		local detail="Install jq to continue."
+		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_DEPENDENCY" "$msg" "Install jq to continue."
+			print_error_json "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
 		else
-			echo "$msg" >&2
+			print_error_block "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
 		fi
 		exit 1
 	fi
 
 	if ! command -v sf > /dev/null 2>&1; then
 		local msg="Error: Salesforce CLI (sf) is not installed."
+		local detail="Install Salesforce CLI to continue."
+		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_DEPENDENCY" "$msg" "Install Salesforce CLI to continue."
+			print_error_json "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
 		else
-			echo "$msg" >&2
+			print_error_block "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
 		fi
 		exit 1
 	fi
@@ -136,10 +108,11 @@ check_dependencies() {
 validate_args() {
 	if [ -z "$TARGET_ORG" ]; then
 		local msg="Error: target org must be specified with -o/--target-org"
+		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_ARGUMENTS" "$msg" "Use -o/--target-org"
+			print_error_json "$msg" "Use -o/--target-org" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
 		else
-			echo "$msg" >&2
+			print_error_block "$msg" "Use -o/--target-org" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
 		fi
 		exit 1
 	fi
@@ -147,27 +120,39 @@ validate_args() {
 
 run_sf_command() {
 	if ! FINAL_JSON=$(sf org display --target-org "$TARGET_ORG" --verbose --json 2> /dev/null); then
-		local msg="Error: Failed to display org info."
+		local msg="Failed to retrieve org authentication information for '$TARGET_ORG'."
+		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "ORG_DISPLAY_FAILED" "$msg"
+			print_error_json "$msg" "$FINAL_JSON" "ORG_DISPLAY_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
 		else
-			echo "$msg" >&2
+			print_error_block "$msg" "$FINAL_JSON" "ORG_DISPLAY_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
 		fi
 		exit 1
 	fi
 }
 
 output_final_result() {
+	local SUCCESS_STATUS="OK"
+	local message="Org authentication information retrieved successfully."
+	local detail="$FINAL_JSON"
 	if [ "$SFDX_AUTH_URL_CONDENSED" = true ]; then
 		echo "$FINAL_JSON" | jq -c .
 	elif [ "$JSON_OUTPUT" = true ]; then
-		print_json_success "$FINAL_JSON"
+		print_standard_json "$SUCCESS_STATUS" "$message" "$detail"
 	else
-		print_human_readable_success
+		print_standard_block "$SUCCESS_STATUS" "$message" "$detail"
+	fi
+}
+
+check_no_args() {
+	if [ $# -eq 0 ]; then
+		show_usage
+		exit 1
 	fi
 }
 
 main() {
+	check_no_args "$@"
 	parse_args "$@"
 	validate_args
 	check_dependencies
