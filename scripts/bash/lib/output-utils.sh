@@ -1,25 +1,46 @@
 #!/bin/bash
 
-# CLI Output Specification Library v0.1.1
-# Author: metasintaxis
-# Provides functions for standardized CLI script output (block and JSON formats).
+#------------------------------------------------------------------------------
+# /**
+#  * @file output-utils.sh
+#  * @module output-utils
+#  * @version 0.1.1
+#  * @author metasintaxis
+#  * @license GPL-3.0
+#  * @description
+#  *   Provides functions for standardized CLI script output (block and JSON formats)
+#  *   according to the CLI Output Specification v0.1.1.
+#  *   Includes support for error reporting with traceability fields.
+#  */
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Generate an ISO 8601 UTC timestamp
+# /**
+#  * Generate an ISO 8601 UTC timestamp.
+#  * @returns {string} ISO 8601 formatted UTC timestamp.
+#  */
 iso_timestamp() {
 	date -u +"%Y-%m-%dT%H:%M:%SZ"
 }
 
 #------------------------------------------------------------------------------
-# Check if a string is valid JSON (object or array)
-# Usage: is_json "$string"
+# /**
+#  * Check if a string is valid JSON (object or array).
+#  * @param {string} $1 - The string to check.
+#  * @returns {boolean} True if the string is valid JSON, false otherwise.
+#  */
 is_json() {
 	[[ "$1" =~ ^\{.*\}$ || "$1" =~ ^\[.*\]$ ]]
 }
 
 #------------------------------------------------------------------------------
-# Print a human-readable block for standard output
-# Usage: print_standard_block <status> <message> <detail>
+# /**
+#  * Print a human-readable block for standard output.
+#  * @param {string} $1 - Status (e.g., "OK").
+#  * @param {string} $2 - Message.
+#  * @param {string} $3 - Detail (may be JSON or plain text).
+#  * @returns {void}
+#  */
 print_standard_block() {
 	local status="$1"
 	local message="$2"
@@ -40,8 +61,13 @@ print_standard_block() {
 }
 
 #------------------------------------------------------------------------------
-# Print a JSON object for standard output
-# Usage: print_standard_json <status> <message> <detail>
+# /**
+#  * Print a JSON object for standard output.
+#  * @param {string} $1 - Status (e.g., "OK").
+#  * @param {string} $2 - Message.
+#  * @param {string} $3 - Detail (may be JSON or plain text).
+#  * @returns {void}
+#  */
 print_standard_json() {
 	local status="$1"
 	local message="$2"
@@ -67,8 +93,16 @@ print_standard_json() {
 }
 
 #------------------------------------------------------------------------------
-# Print a human-readable block for error output
-# Usage: print_error_block <message> <detail> <errorCode> <line> <script> <function>
+# /**
+#  * Print a human-readable block for error output.
+#  * @param {string} $1 - Error message.
+#  * @param {string} $2 - Error detail.
+#  * @param {string} $3 - Error code.
+#  * @param {int}    $4 - Line number.
+#  * @param {string} $5 - Script filename.
+#  * @param {string} $6 - Function name.
+#  * @returns {void}
+#  */
 print_error_block() {
 	local message="$1"
 	local detail="$2"
@@ -96,8 +130,16 @@ print_error_block() {
 }
 
 #------------------------------------------------------------------------------
-# Print a JSON object for error output
-# Usage: print_error_json <message> <detail> <errorCode> <line> <script> <function>
+# /**
+#  * Print a JSON object for error output.
+#  * @param {string} $1 - Error message.
+#  * @param {string} $2 - Error detail.
+#  * @param {string} $3 - Error code.
+#  * @param {int}    $4 - Line number.
+#  * @param {string} $5 - Script filename.
+#  * @param {string} $6 - Function name.
+#  * @returns {void}
+#  */
 print_error_json() {
 	local message="$1"
 	local detail="$2"
