@@ -64,8 +64,8 @@ export const writeDependencySummary = async (
 
 	await core.summary
 		.addHeading(DEPENDENCY_REPORT_HEADING)
-		.addMarkdown(
-			`**Component Analyzed:**\n- Name: \`${sourceName}\`\n- Type: \`${sourceType}\`\n- Id: \`${sourceId}\``
+		.addRaw(
+			`<b>Component Analyzed:</b><br/>Name: <code>${sourceName}</code><br/>Type: <code>${sourceType}</code><br/>Id: <code>${sourceId}</code>`
 		)
 		.addBreak()
 		.addRaw(`Total Dependencies: ${total}`)
