@@ -85,9 +85,9 @@ check_dependencies() {
 		local detail="Install jq to continue."
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
+			print_error_json "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		else
-			print_error_block "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
+			print_error_block "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
@@ -97,9 +97,9 @@ check_dependencies() {
 		local detail="Install Salesforce CLI to continue."
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
+			print_error_json "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		else
-			print_error_block "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
+			print_error_block "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
@@ -110,9 +110,9 @@ validate_args() {
 		local msg="Error: target org must be specified with -o/--target-org"
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "Use -o/--target-org" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
+			print_error_json "$msg" "Use -o/--target-org" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		else
-			print_error_block "$msg" "Use -o/--target-org" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
+			print_error_block "$msg" "Use -o/--target-org" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
@@ -123,9 +123,9 @@ run_sf_command() {
 		local msg="Failed to retrieve org authentication information for '$TARGET_ORG'."
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "$FINAL_JSON" "ORG_DISPLAY_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
+			print_error_json "$msg" "$FINAL_JSON" "ORG_DISPLAY_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		else
-			print_error_block "$msg" "$FINAL_JSON" "ORG_DISPLAY_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func" >&2
+			print_error_block "$msg" "$FINAL_JSON" "ORG_DISPLAY_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
