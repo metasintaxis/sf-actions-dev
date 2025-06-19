@@ -1,0 +1,25 @@
+{
+	"status": "ERROR",
+	"message": "Failed to query dependencies.",
+	"detail": {
+		"name": "INVALID_FIELD",
+		"message": "MetadataComponentName is unknown.",
+		"exitCode": 1,
+		"context": "DataSoqlQueryCommand",
+		"data": {
+			"message": "MetadataComponentName is unknown.",
+			"errorCode": "INVALID_FIELD"
+		},
+		"stack": "INVALID_FIELD: MetadataComponentName is unknown.\n    at SfCommandError.from (file:///Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@salesforce/sf-plugins-core/lib/SfCommandError.js:39:16)\n    at DataSoqlQueryCommand.catch (file:///Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@salesforce/sf-plugins-core/lib/sfCommand.js:323:47)\n    at DataSoqlQueryCommand._run (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@oclif/core/lib/command.js:185:29)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Config.runCommand (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@oclif/core/lib/config/config.js:456:25)\n    at async run (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@oclif/core/lib/main.js:96:16)\n    at async file:///Users/Apple/.local/share/sf/client/2.92.7-df40848/bin/run.js:15:1",
+		"cause": "INVALID_FIELD: MetadataComponentName is unknown.\n    at HttpApi.getError (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@jsforce/jsforce-node/lib/http-api.js:292:56)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async /Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@jsforce/jsforce-node/lib/http-api.js:127:33\n    at async Query._execute (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@jsforce/jsforce-node/lib/query.js:373:22)\n    at async /Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@jsforce/jsforce-node/lib/query.js:305:17 {\n  data: {\n    message: 'MetadataComponentName is unknown.',\n    errorCode: 'INVALID_FIELD'\n  },\n  errorCode: 'INVALID_FIELD'\n}",
+		"warnings": [],
+		"code": "1",
+		"status": 1,
+		"commandName": "DataSoqlQueryCommand"
+	},
+	"timestamp": "2025-06-19T06:45:05Z",
+	"errorCode": "QUERY_DEPENDENCIES_FAILED",
+	"line": 242,
+	"script": "scripts/find-metadata-dependencies/bash/main.sh",
+	"function": "main"
+}

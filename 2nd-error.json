@@ -1,0 +1,26 @@
+{
+	"status": "ERROR",
+	"message": "Could not find Id for the specified component.",
+	"detail": {
+		"status": 0,
+		"result": {
+			"records": [
+				{
+					"attributes": {
+						"type": "ApexClass",
+						"url": "/services/data/v64.0/tooling/sobjects/ApexClass/01pDU00000i7yHDYAY"
+					},
+					"Id": "01pDU00000i7yHDYAY"
+				}
+			],
+			"totalSize": 1,
+			"done": true
+		},
+		"warnings": []
+	},
+	"timestamp": "2025-06-19T06:42:33Z",
+	"errorCode": "ID_NOT_FOUND",
+	"line": 206,
+	"script": "scripts/find-metadata-dependencies/bash/main.sh",
+	"function": "check_component_id"
+}

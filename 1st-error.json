@@ -1,0 +1,25 @@
+{
+	"status": "ERROR",
+	"message": "Failed to get component Id.",
+	"detail": {
+		"name": "INVALID_FIELD",
+		"message": "\nSELECT Id FROM ApexClass WHERE DeveloperName = 'TemperatureConverter'\n                               ^\nERROR at Row:1:Column:32\nNo such column 'DeveloperName' on entity 'ApexClass'. If you are attempting to use a custom field, be sure to append the '__c' after the custom field name. Please reference your WSDL or the describe call for the appropriate names.",
+		"exitCode": 1,
+		"context": "DataSoqlQueryCommand",
+		"data": {
+			"message": "\nSELECT Id FROM ApexClass WHERE DeveloperName = 'TemperatureConverter'\n                               ^\nERROR at Row:1:Column:32\nNo such column 'DeveloperName' on entity 'ApexClass'. If you are attempting to use a custom field, be sure to append the '__c' after the custom field name. Please reference your WSDL or the describe call for the appropriate names.",
+			"errorCode": "INVALID_FIELD"
+		},
+		"stack": "INVALID_FIELD: \nSELECT Id FROM ApexClass WHERE DeveloperName = 'TemperatureConverter'\n                               ^\nERROR at Row:1:Column:32\nNo such column 'DeveloperName' on entity 'ApexClass'. If you are attempting to use a custom field, be sure to append the '__c' after the custom field name. Please reference your WSDL or the describe call for the appropriate names.\n    at SfCommandError.from (file:///Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@salesforce/sf-plugins-core/lib/SfCommandError.js:39:16)\n    at DataSoqlQueryCommand.catch (file:///Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@salesforce/sf-plugins-core/lib/sfCommand.js:323:47)\n    at DataSoqlQueryCommand._run (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@oclif/core/lib/command.js:185:29)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Config.runCommand (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@oclif/core/lib/config/config.js:456:25)\n    at async run (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@oclif/core/lib/main.js:96:16)\n    at async file:///Users/Apple/.local/share/sf/client/2.92.7-df40848/bin/run.js:15:1",
+		"cause": "INVALID_FIELD: \nSELECT Id FROM ApexClass WHERE DeveloperName = 'TemperatureConverter'\n                               ^\nERROR at Row:1:Column:32\nNo such column 'DeveloperName' on entity 'ApexClass'. If you are attempting to use a custom field, be sure to append the '__c' after the custom field name. Please reference your WSDL or the describe call for the appropriate names.\n    at HttpApi.getError (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@jsforce/jsforce-node/lib/http-api.js:292:56)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async /Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@jsforce/jsforce-node/lib/http-api.js:127:33\n    at async Query._execute (/Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@jsforce/jsforce-node/lib/query.js:373:22)\n    at async /Users/Apple/.local/share/sf/client/2.92.7-df40848/node_modules/@jsforce/jsforce-node/lib/query.js:305:17 {\n  data: {\n    message: '\\n' +\n      \"SELECT Id FROM ApexClass WHERE DeveloperName = 'TemperatureConverter'\\n\" +\n      '                               ^\\n' +\n      'ERROR at Row:1:Column:32\\n' +\n      \"No such column 'DeveloperName' on entity 'ApexClass'. If you are attempting to use a custom field, be sure to append the '__c' after the custom field name. Please reference your WSDL or the describe call for the appropriate names.\",\n    errorCode: 'INVALID_FIELD'\n  },\n  errorCode: 'INVALID_FIELD'\n}",
+		"warnings": [],
+		"code": "1",
+		"status": 1,
+		"commandName": "DataSoqlQueryCommand"
+	},
+	"timestamp": "2025-06-19T06:39:56Z",
+	"errorCode": "GET_COMPONENT_ID_FAILED",
+	"line": 187,
+	"script": "scripts/find-metadata-dependencies/bash/main.sh",
+	"function": "check_component_json"
+}

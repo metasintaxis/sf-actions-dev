@@ -1,0 +1,39 @@
+{
+	"status": "OK",
+	"message": "Dependencies retrieved successfully.",
+	"detail": {
+		"status": 0,
+		"result": {
+			"records": [
+				{
+					"attributes": {
+						"type": "MetadataComponentDependency",
+						"url": "/services/data/v64.0/tooling/sobjects/MetadataComponentDependency/000000000000000AAA"
+					},
+					"RefMetadataComponentName": "TemperatureConverter",
+					"RefMetadataComponentId": "01pDU00000i7yHDYAY",
+					"RefMetadataComponentType": "ApexClass",
+					"MetadataComponentId": "01pDU00000i7yHEYAY",
+					"MetadataComponentName": "TemperatureConverterTest",
+					"MetadataComponentType": "ApexClass"
+				},
+				{
+					"attributes": {
+						"type": "MetadataComponentDependency",
+						"url": "/services/data/v64.0/tooling/sobjects/MetadataComponentDependency/000000000000000AAA"
+					},
+					"RefMetadataComponentName": "TemperatureConverter",
+					"RefMetadataComponentId": "01pDU00000i7yHDYAY",
+					"RefMetadataComponentType": "ApexClass",
+					"MetadataComponentId": "01pDU00000iqUIXYA2",
+					"MetadataComponentName": "TemperatureConverterNegativeTest",
+					"MetadataComponentType": "ApexClass"
+				}
+			],
+			"totalSize": 2,
+			"done": true
+		},
+		"warnings": []
+	},
+	"timestamp": "2025-06-19T08:09:31Z"
+}
