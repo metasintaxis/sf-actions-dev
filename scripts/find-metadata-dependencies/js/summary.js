@@ -18,7 +18,8 @@ export const readDependencies = (filePath) => {
 };
 
 export const buildDependencyTableData = (dependencies) => {
-	const records = dependencies?.result?.result?.records || [];
+	// Updated to support new JSON structure
+	const records = dependencies?.detail?.result?.records || [];
 	const tableHeader = [
 		{ data: 'Source Name', header: true },
 		{ data: 'Source Type', header: true },
@@ -43,7 +44,7 @@ export const writeDependencySummary = async (
 	dependencies
 ) => {
 	const DEPENDENCY_REPORT_HEADING = 'Metadata Dependency Report';
-	const TOTAL_DEPENDENCIES_LABEL = `Total Dependencies: ${dependencies?.result?.result?.totalSize ?? 0}`;
+	const TOTAL_DEPENDENCIES_LABEL = `Total Dependencies: ${dependencies?.detail?.result?.totalSize ?? 0}`;
 
 	await core.summary
 		.addHeading(DEPENDENCY_REPORT_HEADING)
