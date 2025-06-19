@@ -20,7 +20,26 @@ import * as core from '@actions/core';
  */
 export function readError(filePath) {
 	const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-	return data.error || {};
+	const detail = data.detail || {};
+	return {
+		status: data.status,
+		message: data.message,
+		errorCode: data.errorCode,
+		line: data.line,
+		script: data.script,
+		function: data.function,
+		timestamp: data.timestamp,
+		// Flatten some detail fields if present
+		detailName: detail.name,
+		detailMessage: detail.message,
+		detailErrorCode: detail.errorCode,
+		detailContext: detail.context,
+		detailStack: detail.stack,
+		detailWarnings: detail.warnings,
+		detailStatus: detail.status,
+		detailCommandName: detail.commandName,
+		detailExitCode: detail.exitCode
+	};
 }
 
 /**
@@ -34,9 +53,34 @@ export function formatErrorTable(error) {
 			{ data: 'Field', header: true },
 			{ data: 'Value', header: true }
 		],
-		['Error Code', error.code || 'UNKNOWN_ERROR'],
-		['Message', error.message || 'No error message provided.'],
-		['Details', error.details || '']
+		['Status', error.status || ''],
+		[
+			'Error Code',
+			error.errorCode ||
+				error.detailErrorCode ||
+				'UNKNOWN_ERROR'
+		],
+		[
+			'Message',
+			error.message ||
+				error.detailMessage ||
+				'No error message provided.'
+		],
+		['Detail Name', error.detailName || ''],
+		['Detail Context', error.detailContext || ''],
+		['Script', error.script || ''],
+		['Function', error.function || ''],
+		['Line', error.line != null ? String(error.line) : ''],
+		['Timestamp', error.timestamp || ''],
+		[
+			'Stack',
+			error.detailStack
+				? error.detailStack.length > 500
+					? error.detailStack.slice(0, 500) +
+						'...'
+					: error.detailStack
+				: ''
+		]
 	];
 }
 
