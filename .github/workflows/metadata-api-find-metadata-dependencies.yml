@@ -116,7 +116,7 @@ jobs:
         shell: bash
         continue-on-error: true
         run: |
-          chmod +x ./scripts/find-metadata-dependencies/bash/main.sh
+          chmod +x ./scripts/find-metadata-dependencies/bash/find-metadata-dependencies.sh
           SEARCH_FIELD="${{ github.event.inputs.search_field }}"
           COMPONENT_TYPE="${{ github.event.inputs.component_type }}"
           COMPONENT_NAME="${{ github.event.inputs.component_name }}"
@@ -130,13 +130,13 @@ jobs:
             echo "❌ Unsupported search_field: $SEARCH_FIELD"
             exit 1
           fi
-          ./scripts/find-metadata-dependencies/bash/main.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies-report.json
+          ./scripts/find-metadata-dependencies/bash/find-metadata-dependencies.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies-report.json
 
       - name: Check for Script Errors and Fail if Present
         id: check-errors
         shell: bash
         run: |
-          if jq -e '.success == false' dependencies-report.json > /dev/null; then
+          if jq -e '.status == "ERROR"' dependencies-report.json > /dev/null; then
             echo "error=true" >> $GITHUB_OUTPUT
           else
             echo "error=false" >> $GITHUB_OUTPUT
