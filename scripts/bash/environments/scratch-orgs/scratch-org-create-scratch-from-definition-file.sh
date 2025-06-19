@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash
 
 # -----------------------------------------------------------------------------
 # @file scratch-org-create-scratch-from-definition-file.sh
