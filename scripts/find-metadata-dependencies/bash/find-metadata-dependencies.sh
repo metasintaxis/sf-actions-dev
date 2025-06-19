@@ -184,9 +184,9 @@ check_component_json() {
 	local JSON_OUTPUT="$3"
 	if [ "$fetch_status" -ne 0 ] || is_sf_error_json "$COMPONENT_JSON"; then
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$FUNCNAME"
+			print_error_json "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
 		else
-			print_error_block "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$FUNCNAME"
+			print_error_block "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
 		fi
 		exit 1
 	fi
