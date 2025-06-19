@@ -13,47 +13,70 @@
 import fs from 'fs';
 import * as core from '@actions/core';
 
+/**
+ * Reads and parses the dependencies JSON file.
+ * @param {string} filePath
+ * @returns {object}
+ */
 export const readDependencies = (filePath) => {
 	return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 };
 
+/**
+ * Builds the table data for dependent components.
+ * @param {object} dependencies
+ * @returns {Array<Array<{data: string, header?: boolean}>>}
+ */
 export const buildDependencyTableData = (dependencies) => {
-	// Updated to support new JSON structure
 	const records = dependencies?.detail?.result?.records || [];
 	const tableHeader = [
-		{ data: 'Source Name', header: true },
-		{ data: 'Source Type', header: true },
-		{ data: 'Target Name', header: true },
-		{ data: 'Target Type', header: true }
+		{ data: 'Dependent Component Name', header: true },
+		{ data: 'Type', header: true },
+		{ data: 'Component Id', header: true }
 	];
 	const tableData = [tableHeader];
 
 	for (const record of records) {
 		tableData.push([
-			{ data: record.RefMetadataComponentName },
-			{ data: record.RefMetadataComponentType },
 			{ data: record.MetadataComponentName },
-			{ data: record.MetadataComponentType }
+			{ data: record.MetadataComponentType },
+			{ data: record.MetadataComponentId }
 		]);
 	}
 	return tableData;
 };
 
+/**
+ * Writes the dependency summary to the GitHub Actions summary.
+ * @param {Array} dependencyTableData
+ * @param {object} dependencies
+ */
 export const writeDependencySummary = async (
 	dependencyTableData,
 	dependencies
 ) => {
 	const DEPENDENCY_REPORT_HEADING = 'Metadata Dependency Report';
-	const TOTAL_DEPENDENCIES_LABEL = `Total Dependencies: ${dependencies?.detail?.result?.totalSize ?? 0}`;
+	const total = dependencies?.detail?.result?.totalSize ?? 0;
+	const firstRecord = dependencies?.detail?.result?.records?.[0] || {};
+	const sourceName = firstRecord.RefMetadataComponentName || 'Unknown';
+	const sourceType = firstRecord.RefMetadataComponentType || 'Unknown';
+	const sourceId = firstRecord.RefMetadataComponentId || 'Unknown';
 
 	await core.summary
 		.addHeading(DEPENDENCY_REPORT_HEADING)
-		.addRaw(TOTAL_DEPENDENCIES_LABEL)
+		.addRaw(
+			`**Source Component:** ${sourceName} (${sourceType}, Id: ${sourceId})`
+		)
+		.addBreak()
+		.addRaw(`Total Dependencies: ${total}`)
 		.addBreak()
 		.addTable(dependencyTableData)
 		.write();
 };
 
+/**
+ * Main execution function.
+ */
 const main = async () => {
 	const filePath = process.argv[2];
 	if (!filePath) {
