@@ -28,38 +28,8 @@
 
 set -euo pipefail
 
-OBJECT=""
-NAME=""
-DEVELOPER_NAME=""
-MASTER_LABEL=""
-JSON_OUTPUT=false
-
-print_json_error() {
-	local code="$1"
-	local message="$2"
-	local details="${3:-}"
-	echo -n '{'
-	echo -n "\"success\": false, \"error\": {\"code\": \"$code\", \"message\": \"$message\""
-	if [ -n "$details" ]; then
-		echo -n ", \"details\": \"$details\""
-	fi
-	echo '}}'
-}
-
-print_json_success() {
-	local result="$1"
-	echo -n '{'
-	echo -n "\"success\": true, \"result\": $result"
-	echo '}'
-}
-
-print_human_readable_success() {
-	local deps_json="$1"
-	local count
-	count=$(echo "$deps_json" | jq '.result.records | length')
-	echo "Found $count dependencies:"
-	echo "$deps_json" | jq -r '.result.records[] | "- \(.MetadataComponentType): \(.MetadataComponentName) (Id: \(.MetadataComponentId))"' || true
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../../bash/lib/output-utils.sh"
 
 show_usage() {
 	echo "Usage:"
@@ -75,72 +45,28 @@ show_usage() {
 	echo "  -h, --help             Show this help message and exit."
 }
 
-check_dependencies() {
-	if ! command -v sf > /dev/null 2>&1; then
-		local msg="Error: Salesforce CLI (sf) is not installed."
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_DEPENDENCY" "$msg" "Install Salesforce CLI to continue."
-		else
-			echo "$msg" >&2
-		fi
-		exit 1
-	fi
-	if ! command -v jq > /dev/null 2>&1; then
-		local msg="Error: jq is required but not installed."
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_DEPENDENCY" "$msg" "Install jq to continue."
-		else
-			echo "$msg" >&2
-		fi
-		exit 1
-	fi
-}
-
-validate_args() {
-	if [ -z "$OBJECT" ] || { [ -z "$NAME" ] && [ -z "$DEVELOPER_NAME" ] && [ -z "$MASTER_LABEL" ]; }; then
-		local msg="Error: object and at least one of name, developer-name, or master-label must be specified"
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_ARGUMENTS" "$msg"
-		else
-			echo "$msg" >&2
-		fi
-		exit 1
-	fi
-}
-
 parse_args() {
-	JSON_OUTPUT=false
+	local OBJECT=""
+	local NAME=""
+	local DEVELOPER_NAME=""
+	local MASTER_LABEL=""
+	local JSON_OUTPUT=false
+
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			-o | --object)
-				if [[ -z "${2:-}" || "${2:0:1}" == "-" ]]; then
-					echo "Error: --object requires a value." >&2
-					exit 1
-				fi
 				OBJECT="$2"
 				shift 2
 				;;
 			-n | --name)
-				if [[ -z "${2:-}" || "${2:0:1}" == "-" ]]; then
-					echo "Error: --name requires a value." >&2
-					exit 1
-				fi
 				NAME="$2"
 				shift 2
 				;;
 			-d | --developer-name)
-				if [[ -z "${2:-}" || "${2:0:1}" == "-" ]]; then
-					echo "Error: --developer-name requires a value." >&2
-					exit 1
-				fi
 				DEVELOPER_NAME="$2"
 				shift 2
 				;;
 			-m | --master-label)
-				if [[ -z "${2:-}" || "${2:0:1}" == "-" ]]; then
-					echo "Error: --master-label requires a value." >&2
-					exit 1
-				fi
 				MASTER_LABEL="$2"
 				shift 2
 				;;
@@ -152,33 +78,62 @@ parse_args() {
 				show_usage
 				exit 0
 				;;
-			-*)
-				show_usage >&2
-				exit 1
-				;;
 			*)
-				break
+				show_usage
+				exit 1
 				;;
 		esac
 	done
+
+	echo "$OBJECT|$NAME|$DEVELOPER_NAME|$MASTER_LABEL|$JSON_OUTPUT"
 }
 
-get_component_id() {
-	local object="$1"
-	local field="$2"
-	local value="$3"
-	local query="SELECT Id FROM $object WHERE $field = '$value' LIMIT 1"
-	sf data query --query "$query" --use-tooling-api --json | jq -r '.result.records[0].Id'
+validate_args() {
+	local OBJECT="$1"
+	local NAME="$2"
+	local DEVELOPER_NAME="$3"
+	local MASTER_LABEL="$4"
+	local JSON_OUTPUT="$5"
+	if [ -z "$OBJECT" ] || { [ -z "$NAME" ] && [ -z "$DEVELOPER_NAME" ] && [ -z "$MASTER_LABEL" ]; }; then
+		local msg="Error: object and at least one of name, developer-name, or master-label must be specified"
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "" "MISSING_ARGUMENTS" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "" "MISSING_ARGUMENTS" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
 }
 
-query_dependencies() {
-	local object="$1"
-	local component_id="$2"
-	local dep_query="SELECT RefMetadataComponentName, RefMetadataComponentId, RefMetadataComponentType, MetadataComponentId, MetadataComponentName, MetadataComponentType FROM MetadataComponentDependency WHERE RefMetadataComponentType = '$object' AND RefMetadataComponentId = '$component_id'"
-	sf data query --query "$dep_query" --use-tooling-api --json
+check_dependencies() {
+	local JSON_OUTPUT="$1"
+	if ! command -v sf > /dev/null 2>&1; then
+		local msg="Error: Salesforce CLI (sf) is not installed."
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "Install Salesforce CLI to continue." "MISSING_DEPENDENCY" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "Install Salesforce CLI to continue." "MISSING_DEPENDENCY" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
+	if ! command -v jq > /dev/null 2>&1; then
+		local msg="Error: jq is required but not installed."
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "Install jq to continue." "MISSING_DEPENDENCY" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "Install jq to continue." "MISSING_DEPENDENCY" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
 }
 
 get_search_field_and_value() {
+	local NAME="$1"
+	local DEVELOPER_NAME="$2"
+	local MASTER_LABEL="$3"
 	if [ -n "$NAME" ]; then
 		echo "Name|$NAME"
 	elif [ -n "$DEVELOPER_NAME" ]; then
@@ -190,78 +145,111 @@ get_search_field_and_value() {
 	fi
 }
 
-resolve_component_id() {
-	local object="$1"
-	local search_field="$2"
-	local search_value="$3"
-	get_component_id "$object" "$search_field" "$search_value"
+get_component_id_json() {
+	local OBJECT="$1"
+	local FIELD="$2"
+	local VALUE="$3"
+	local query="SELECT Id FROM $OBJECT WHERE $FIELD = '$VALUE' LIMIT 1"
+	sf data query --query "$query" --use-tooling-api --json
 }
 
-get_dependencies_json() {
+fetch_component_id_json() {
+	local OBJECT="$1"
+	local FIELD="$2"
+	local VALUE="$3"
+	get_component_id_json "$OBJECT" "$FIELD" "$VALUE"
+}
+
+is_sf_error_json() {
+	echo "$1" | jq -e 'has("status") and .status == 1' > /dev/null 2>&1
+}
+
+query_dependencies() {
 	local object="$1"
 	local component_id="$2"
-	query_dependencies "$object" "$component_id"
+	local dep_query="SELECT RefMetadataComponentName, RefMetadataComponentId, RefMetadataComponentType, MetadataComponentId, MetadataComponentName, MetadataComponentType FROM MetadataComponentDependency WHERE RefMetadataComponentType = '$object' AND RefMetadataComponentId = '$component_id'"
+	sf data query --query "$dep_query" --use-tooling-api --json
 }
 
-handle_component_id_error() {
-	local error_msg="$1"
-	if [ "$JSON_OUTPUT" = true ]; then
-		print_json_error "GET_COMPONENT_ID_FAILED" "Failed to get component Id." "$error_msg"
-	else
-		echo "Failed to get component Id: $error_msg" >&2
+# Refactored: Only queries and returns result, does not print or exit
+fetch_dependencies() {
+	local OBJECT="$1"
+	local COMPONENT_ID="$2"
+	query_dependencies "$OBJECT" "$COMPONENT_ID"
+}
+
+check_component_json() {
+	local fetch_status="$1"
+	local COMPONENT_JSON="$2"
+	local JSON_OUTPUT="$3"
+	if [ "$fetch_status" -ne 0 ] || is_sf_error_json "$COMPONENT_JSON"; then
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$FUNCNAME"
+		else
+			print_error_block "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$FUNCNAME"
+		fi
+		exit 1
 	fi
 }
 
-handle_component_not_found() {
-	local object="$1"
-	local field="$2"
-	local value="$3"
-	local msg="Component not found for $object where $field = '$value'."
-	if [ "$JSON_OUTPUT" = true ]; then
-		print_json_error "COMPONENT_NOT_FOUND" "$msg"
-	else
-		echo "$msg" >&2
-	fi
+get_component_id() {
+	local component_json="$1"
+	echo "$component_json" | jq -r '.result.records[0].Id // empty'
 }
 
-handle_query_dependencies_error() {
-	local error_msg="$1"
-	if [ "$JSON_OUTPUT" = true ]; then
-		print_json_error "QUERY_DEPENDENCIES_FAILED" "Failed to query dependencies." "$error_msg"
-	else
-		echo "Failed to query dependencies: $error_msg" >&2
+check_component_id() {
+	local component_id="$1"
+	local component_json="$2"
+	local json_output="$3"
+	if [ -z "$component_id" ] || [ "$component_id" = "null" ]; then
+		if [ "$json_output" = true ]; then
+			print_error_json "Could not find Id for the specified component." "$component_json" "ID_NOT_FOUND" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
+		else
+			print_error_block "Could not find Id for the specified component." "$component_json" "ID_NOT_FOUND" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
+		fi
+		exit 1
 	fi
 }
 
 main() {
-	parse_args "$@"
-	validate_args
-	check_dependencies
+	local parsed
+	parsed=$(parse_args "$@")
+	IFS='|' read -r OBJECT NAME DEVELOPER_NAME MASTER_LABEL JSON_OUTPUT <<< "$parsed"
 
-	# Get SEARCH_FIELD and SEARCH_VALUE as separate variables for clarity
-	IFS='|' read -r SEARCH_FIELD SEARCH_VALUE <<< "$(get_search_field_and_value)"
+	validate_args "$OBJECT" "$NAME" "$DEVELOPER_NAME" "$MASTER_LABEL" "$JSON_OUTPUT"
+	check_dependencies "$JSON_OUTPUT"
 
+	IFS='|' read -r SEARCH_FIELD SEARCH_VALUE <<< "$(get_search_field_and_value "$NAME" "$DEVELOPER_NAME" "$MASTER_LABEL")"
+
+	# Capture output and status without exiting on error
+	local COMPONENT_JSON
+	local fetch_status=0
+	COMPONENT_JSON=$(fetch_component_id_json "$OBJECT" "$SEARCH_FIELD" "$SEARCH_VALUE") || fetch_status=$?
+	check_component_json "$fetch_status" "$COMPONENT_JSON" "$JSON_OUTPUT"
+
+	# Extract Id
 	local COMPONENT_ID
-	if ! COMPONENT_ID=$(resolve_component_id "$OBJECT" "$SEARCH_FIELD" "$SEARCH_VALUE" 2>&1); then
-		handle_component_id_error "Id: $COMPONENT_ID"
-		exit 1
-	fi
+	COMPONENT_ID=$(get_component_id "$COMPONENT_JSON")
+	check_component_id "$COMPONENT_ID" "$COMPONENT_JSON" "$JSON_OUTPUT"
 
-	if [ -z "$COMPONENT_ID" ] || [ "$COMPONENT_ID" = "null" ]; then
-		handle_component_not_found "$OBJECT" "$SEARCH_FIELD" "$SEARCH_VALUE"
-		exit 1
-	fi
-
+	# Fetch dependencies and handle errors here
 	local DEPS_JSON
-	if ! DEPS_JSON=$(get_dependencies_json "$OBJECT" "$COMPONENT_ID" 2>&1); then
-		handle_query_dependencies_error "$DEPS_JSON"
+	local deps_status=0
+	DEPS_JSON=$(fetch_dependencies "$OBJECT" "$COMPONENT_ID") || deps_status=$?
+
+	if [ $deps_status -ne 0 ] || is_sf_error_json "$DEPS_JSON"; then
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "Failed to query dependencies." "$DEPS_JSON" "QUERY_DEPENDENCIES_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
+		else
+			print_error_block "Failed to query dependencies." "$DEPS_JSON" "QUERY_DEPENDENCIES_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
+		fi
 		exit 1
 	fi
 
 	if [ "$JSON_OUTPUT" = true ]; then
-		print_json_success "$DEPS_JSON"
+		print_standard_json "OK" "Dependencies retrieved successfully." "$DEPS_JSON"
 	else
-		print_human_readable_success "$DEPS_JSON"
+		print_standard_block "OK" "Dependencies retrieved successfully." "$DEPS_JSON"
 	fi
 }
 
