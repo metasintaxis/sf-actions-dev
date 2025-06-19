@@ -30,31 +30,9 @@
 
 set -euo pipefail
 
-DEFINITION_FILE=""
-SCRATCH_ALIAS=""
-DURATION_DAYS=""
-SF_DEV_HUB_ALIAS=""
-JSON_OUTPUT=false
-NO_NAMESPACE=false
-
-print_json_error() {
-	local code="$1"
-	local message="$2"
-	local details="$3"
-	echo -n '{'
-	echo -n "\"success\": false, \"error\": {\"code\": \"$code\", \"message\": \"$message\""
-	if [ -n "$details" ]; then
-		echo -n ", \"details\": \"$details\""
-	fi
-	echo '}}'
-}
-
-print_json_success() {
-	local result="$1"
-	echo -n '{'
-	echo -n "\"success\": true, \"result\": $result"
-	echo '}'
-}
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../../lib/output-utils.sh"
 
 show_usage() {
 	echo "Usage:"
@@ -71,21 +49,15 @@ show_usage() {
 	echo "  --help                   Show this help message and exit."
 }
 
-validate_args() {
-	if [ -z "$DEFINITION_FILE" ] || [ -z "$SCRATCH_ALIAS" ] || [ -z "$DURATION_DAYS" ] || [ -z "$SF_DEV_HUB_ALIAS" ]; then
-		local msg="Error: definition file, alias, duration days, and dev hub alias must be specified"
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_ARGUMENTS" "$msg" "Use -d/--definition-file, -a/--alias, -t/--duration-days, and -h/--target-dev-hub"
-		else
-			echo "$msg"
-		fi
-		exit 1
-	fi
-}
-
 parse_args() {
-	JSON_OUTPUT=false
-	NO_NAMESPACE=false
+	local args=("$@")
+	local DEFINITION_FILE=""
+	local SCRATCH_ALIAS=""
+	local DURATION_DAYS=""
+	local SF_DEV_HUB_ALIAS=""
+	local JSON_OUTPUT=false
+	local NO_NAMESPACE=false
+
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			-f | --definition-file)
@@ -122,30 +94,58 @@ parse_args() {
 				;;
 		esac
 	done
+
+	echo "$DEFINITION_FILE|$SCRATCH_ALIAS|$DURATION_DAYS|$SF_DEV_HUB_ALIAS|$NO_NAMESPACE|$JSON_OUTPUT"
+}
+
+validate_args() {
+	local DEFINITION_FILE="$1"
+	local SCRATCH_ALIAS="$2"
+	local DURATION_DAYS="$3"
+	local SF_DEV_HUB_ALIAS="$4"
+	local JSON_OUTPUT="$5"
+	if [ -z "$DEFINITION_FILE" ] || [ -z "$SCRATCH_ALIAS" ] || [ -z "$DURATION_DAYS" ] || [ -z "$SF_DEV_HUB_ALIAS" ]; then
+		local msg="Error: definition file, alias, duration days, and dev hub alias must be specified"
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "Use -f/--definition-file, -a/--alias, -y/--duration-days, and -v/--target-dev-hub" "MISSING_ARGUMENTS" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "Use -f/--definition-file, -a/--alias, -y/--duration-days, and -v/--target-dev-hub" "MISSING_ARGUMENTS" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
 }
 
 check_dependencies() {
+	local JSON_OUTPUT="$1"
 	if ! command -v sf > /dev/null 2>&1; then
 		local msg="Error: Salesforce CLI (sf) is not installed."
+		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_DEPENDENCY" "$msg" "Install Salesforce CLI to continue."
+			print_error_json "$msg" "Install Salesforce CLI to continue." "MISSING_DEPENDENCY" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		else
-			echo "$msg"
+			print_error_block "$msg" "Install Salesforce CLI to continue." "MISSING_DEPENDENCY" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
 	if ! command -v jq > /dev/null 2>&1; then
 		local msg="Error: jq is required but not installed."
+		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "MISSING_DEPENDENCY" "$msg" "Install jq to continue."
+			print_error_json "$msg" "Install jq to continue." "MISSING_DEPENDENCY" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		else
-			echo "$msg"
+			print_error_block "$msg" "Install jq to continue." "MISSING_DEPENDENCY" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
 }
 
 run_sf_create_scratch_command() {
+	local DEFINITION_FILE="$1"
+	local SCRATCH_ALIAS="$2"
+	local DURATION_DAYS="$3"
+	local SF_DEV_HUB_ALIAS="$4"
+	local NO_NAMESPACE="$5"
 	sf org create scratch \
 		--definition-file "$DEFINITION_FILE" \
 		--alias "$SCRATCH_ALIAS" \
@@ -158,95 +158,115 @@ run_sf_create_scratch_command() {
 }
 
 start_scratch_org_creation() {
-	if ! CREATE_OUTPUT=$(run_sf_create_scratch_command); then
+	local DEFINITION_FILE="$1"
+	local SCRATCH_ALIAS="$2"
+	local DURATION_DAYS="$3"
+	local SF_DEV_HUB_ALIAS="$4"
+	local NO_NAMESPACE="$5"
+	local JSON_OUTPUT="$6"
+	local CREATE_OUTPUT
+	CREATE_OUTPUT=$(run_sf_create_scratch_command "$DEFINITION_FILE" "$SCRATCH_ALIAS" "$DURATION_DAYS" "$SF_DEV_HUB_ALIAS" "$NO_NAMESPACE")
+	local status=$?
+	if [ $status -ne 0 ] || echo "$CREATE_OUTPUT" | jq -e '.status // empty' | grep -q 1; then
 		local msg="Error: Failed to start scratch org creation."
+		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "SCRATCH_ORG_CREATION_FAILED" "$msg" "$CREATE_OUTPUT"
+			print_error_json "$msg" "$CREATE_OUTPUT" "SCRATCH_ORG_CREATION_FAILED" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		else
-			echo "$msg"
-			echo "$CREATE_OUTPUT"
+			print_error_block "$msg" "$CREATE_OUTPUT" "SCRATCH_ORG_CREATION_FAILED" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		fi
-		exit 1
+		return 0
 	fi
+	echo "$CREATE_OUTPUT"
 }
 
 extract_job_id() {
+	local CREATE_OUTPUT="$1"
+	local JSON_OUTPUT="$2"
+	local JOB_ID
 	JOB_ID=$(echo "$CREATE_OUTPUT" | jq -r '.result.scratchOrgInfo.Id')
 	if [ -z "$JOB_ID" ] || [ "$JOB_ID" = "null" ]; then
 		local msg="Error: Could not extract job ID from scratch org creation output."
+		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_json_error "NO_JOB_ID" "$msg" "$CREATE_OUTPUT"
+			print_error_json "$msg" "$CREATE_OUTPUT" "NO_JOB_ID" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		else
-			echo "$msg"
-			echo "$CREATE_OUTPUT"
+			print_error_block "$msg" "$CREATE_OUTPUT" "NO_JOB_ID" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
+	echo "$JOB_ID"
 }
 
 show_progress() {
+	local JOB_ID="$1"
 	echo "Scratch org creation started. Job ID: $JOB_ID" >&2
 	echo "Showing progress (human readable):" >&2
-	sf org resume scratch --job-id "$JOB_ID" >&2
+	sf org resume scratch --job-id "$JOB_ID" --wait 30 >&2
 }
 
 get_final_json_output() {
+	local JOB_ID="$1"
+	local CREATE_OUTPUT="$2"
+	local JSON_OUTPUT="$3"
+	local FINAL_JSON
 	if ! FINAL_JSON=$(sf org resume scratch --job-id "$JOB_ID" --json 2> /dev/null); then
 		# If resume fails, try to use CREATE_OUTPUT if it's valid JSON
 		if echo "$CREATE_OUTPUT" | jq empty 2> /dev/null; then
 			FINAL_JSON="$CREATE_OUTPUT"
 		else
 			local msg="Neither resume nor CREATE_OUTPUT returned valid JSON."
+			local func="${FUNCNAME[0]}"
 			if [ "$JSON_OUTPUT" = true ]; then
-				print_json_error "INVALID_JSON" "$msg" "$CREATE_OUTPUT"
+				print_error_json "$msg" "$CREATE_OUTPUT" "INVALID_JSON" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 			else
-				echo "$msg"
-				echo "$CREATE_OUTPUT"
+				print_error_block "$msg" "$CREATE_OUTPUT" "INVALID_JSON" "${BASH_LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 			fi
 			exit 1
 		fi
 	fi
+	echo "$FINAL_JSON"
 }
 
 output_final_result() {
+	local FINAL_JSON="$1"
+	local JSON_OUTPUT="$2"
 	if [ "$JSON_OUTPUT" = true ]; then
-		print_json_success "$FINAL_JSON"
+		print_standard_json "OK" "Scratch org created successfully." "$FINAL_JSON"
 	else
-		print_human_readable_success
+		print_standard_block "OK" "Scratch org created successfully!" "$FINAL_JSON"
 	fi
 }
 
-print_human_readable_success() {
-	# Assumes $FINAL_JSON contains the JSON output
-	local org_id
-	local username
-	local status
-	org_id=$(echo "$FINAL_JSON" | jq -r '.result.scratchOrgInfo.Id // empty')
-	org_name=$(echo "$FINAL_JSON" | jq -r '.result.scratchOrgInfo.OrgName // empty')
-	username=$(echo "$FINAL_JSON" | jq -r '.result.username // empty')
-	admin_email=$(echo "$FINAL_JSON" | jq -r '.result.scratchOrgInfo.AdminEmail // empty')
-	status=$(echo "$FINAL_JSON" | jq -r '.result.scratchOrgInfo.Status // empty')
-	echo "Scratch org created successfully!"
-	[ -n "$org_id" ] && echo "Org ID: $org_id"
-	[ -n "$org_name" ] && echo "Org Name: $org_name"
-	[ -n "$username" ] && echo "Username: $username"
-	[ -n "$admin_email" ] && echo "Admin Email: $admin_email"
-	[ -n "$status" ] && echo "Status: $status"
-}
-
 run_scratch_org_creation() {
-	start_scratch_org_creation
-	extract_job_id
-	show_progress
-	get_final_json_output
-	output_final_result
+	local DEFINITION_FILE="$1"
+	local SCRATCH_ALIAS="$2"
+	local DURATION_DAYS="$3"
+	local SF_DEV_HUB_ALIAS="$4"
+	local NO_NAMESPACE="$5"
+	local JSON_OUTPUT="$6"
+
+	local CREATE_OUTPUT JOB_ID FINAL_JSON
+
+	CREATE_OUTPUT=$(start_scratch_org_creation "$DEFINITION_FILE" "$SCRATCH_ALIAS" "$DURATION_DAYS" "$SF_DEV_HUB_ALIAS" "$NO_NAMESPACE" "$JSON_OUTPUT")
+	# Check for error indicators in the output
+	if echo "$CREATE_OUTPUT" | grep -q -e 'Status    : ERROR' -e '"status": "ERROR"'; then
+		echo "$CREATE_OUTPUT"
+		exit 0
+	fi
+	JOB_ID=$(extract_job_id "$CREATE_OUTPUT" "$JSON_OUTPUT")
+	show_progress "$JOB_ID"
+	FINAL_JSON=$(get_final_json_output "$JOB_ID" "$CREATE_OUTPUT" "$JSON_OUTPUT")
+	output_final_result "$FINAL_JSON" "$JSON_OUTPUT"
 }
 
 main() {
-	parse_args "$@"
-	validate_args
-	check_dependencies
-	run_scratch_org_creation
+	local parsed
+	parsed=$(parse_args "$@")
+	IFS='|' read -r DEFINITION_FILE SCRATCH_ALIAS DURATION_DAYS SF_DEV_HUB_ALIAS NO_NAMESPACE JSON_OUTPUT <<< "$parsed"
+	validate_args "$DEFINITION_FILE" "$SCRATCH_ALIAS" "$DURATION_DAYS" "$SF_DEV_HUB_ALIAS" "$JSON_OUTPUT"
+	check_dependencies "$JSON_OUTPUT"
+	run_scratch_org_creation "$DEFINITION_FILE" "$SCRATCH_ALIAS" "$DURATION_DAYS" "$SF_DEV_HUB_ALIAS" "$NO_NAMESPACE" "$JSON_OUTPUT"
 }
 
 main "$@"
