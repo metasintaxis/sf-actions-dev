@@ -211,6 +211,13 @@ check_component_id() {
 	fi
 }
 
+enable_bash_debug() {
+	if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
+		set -x
+		echo "Debug mode enabled: Bash tracing is ON" >&2
+	fi
+}
+
 main() {
 	local parsed
 	parsed=$(parse_args "$@")
@@ -253,9 +260,6 @@ main() {
 	fi
 }
 
-if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
-  set -x
-  echo "Debug mode enabled: Bash tracing is ON" >&2
-fi
+enable_bash_debug
 
 main "$@"
