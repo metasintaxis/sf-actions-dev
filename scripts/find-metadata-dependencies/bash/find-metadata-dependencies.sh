@@ -253,4 +253,9 @@ main() {
 	fi
 }
 
+if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
+  set -x
+  echo "Debug mode enabled: Bash tracing is ON" >&2
+fi
+
 main "$@"
