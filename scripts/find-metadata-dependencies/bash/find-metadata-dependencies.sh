@@ -184,9 +184,9 @@ check_component_json() {
 	local JSON_OUTPUT="$3"
 	if [ "$fetch_status" -ne 0 ] || is_sf_error_json "$COMPONENT_JSON"; then
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$FUNCNAME"
+			print_error_json "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
 		else
-			print_error_block "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$FUNCNAME"
+			print_error_block "Failed to get component Id." "$COMPONENT_JSON" "GET_COMPONENT_ID_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
 		fi
 		exit 1
 	fi
@@ -208,6 +208,13 @@ check_component_id() {
 			print_error_block "Could not find Id for the specified component." "$component_json" "ID_NOT_FOUND" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
 		fi
 		exit 1
+	fi
+}
+
+enable_bash_debug() {
+	if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
+		set -x
+		echo "Debug mode enabled: Bash tracing is ON" >&2
 	fi
 }
 
@@ -252,5 +259,7 @@ main() {
 		print_standard_block "OK" "Dependencies retrieved successfully." "$DEPS_JSON"
 	fi
 }
+
+enable_bash_debug
 
 main "$@"
