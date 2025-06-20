@@ -1,5 +1,5 @@
 /**
- * @file metadata-api-find-metadata-dependencies.js
+ * @file summary.js
  * @brief Summarizes Salesforce metadata dependencies as a GitHub Actions summary table.
  *
  * @description
@@ -7,7 +7,7 @@
  *   and writes a formatted summary table to the GitHub Actions summary using @actions/core.
  *
  * @usage
- *   node metadata-api-find-metadata-dependencies.js <dependencies-report.json>
+ *   node summary.js <dependencies-report.json>
  */
 
 import fs from 'fs';
@@ -38,12 +38,32 @@ export const buildDependencyTableData = (dependencies) => {
 
 	for (const record of records) {
 		tableData.push([
-			{ data: record.MetadataComponentName },
-			{ data: record.MetadataComponentType },
-			{ data: record.MetadataComponentId }
+			{ data: record.MetadataComponentName || '' },
+			{ data: record.MetadataComponentType || '' },
+			{ data: record.MetadataComponentId || '' }
 		]);
 	}
 	return tableData;
+};
+
+/**
+ * Builds a table for the source component.
+ * @param {object} record
+ * @returns {Array<Array<{data: string, header?: boolean}>>}
+ */
+export const buildSourceComponentTable = (record) => {
+	return [
+		[
+			{ data: 'Id', header: true },
+			{ data: 'Type', header: true },
+			{ data: 'Name', header: true }
+		],
+		[
+			{ data: record.RefMetadataComponentId || 'Unknown' },
+			{ data: record.RefMetadataComponentType || 'Unknown' },
+			{ data: record.RefMetadataComponentName || 'Unknown' }
+		]
+	];
 };
 
 /**
@@ -56,22 +76,43 @@ export const writeDependencySummary = async (
 	dependencies
 ) => {
 	const DEPENDENCY_REPORT_HEADING = 'Metadata Dependency Report';
+	const SOURCE_COMPONENT_HEADING = 'Source Component';
 	const total = dependencies?.detail?.result?.totalSize ?? 0;
-	const firstRecord = dependencies?.detail?.result?.records?.[0] || {};
-	const sourceName = firstRecord.RefMetadataComponentName || 'Unknown';
-	const sourceType = firstRecord.RefMetadataComponentType || 'Unknown';
-	const sourceId = firstRecord.RefMetadataComponentId || 'Unknown';
+	const records = dependencies?.detail?.result?.records || [];
+	const firstRecord = records[0] || {};
+	const sourceComponentTable = buildSourceComponentTable(firstRecord);
 
 	await core.summary
 		.addHeading(DEPENDENCY_REPORT_HEADING)
-		.addRaw(
-			`<b>Component Analyzed:</b><br/>Name: <code>${sourceName}</code><br/>Type: <code>${sourceType}</code><br/>Id: <code>${sourceId}</code>`
-		)
+		.addHeading(SOURCE_COMPONENT_HEADING, 4)
+		.addTable(sourceComponentTable)
 		.addBreak()
-		.addRaw(`Total Dependencies: ${total}`)
-		.addBreak()
-		.addTable(dependencyTableData)
-		.write();
+		.addRaw(`<b>Total Dependencies:</b> ${total}`)
+		.addBreak();
+
+	if (total > 0) {
+		await core.summary.addTable(dependencyTableData);
+	} else {
+		await core.summary.addRaw('No dependencies found.');
+	}
+
+	const warnings = dependencies?.detail?.warnings || [];
+	if (warnings.length > 0) {
+		await core.summary
+			.addBreak()
+			.addHeading('Warnings')
+			.addList(warnings);
+	}
+
+	if (dependencies?.timestamp) {
+		await core.summary
+			.addBreak()
+			.addRaw(
+				`<sub>Report generated: ${dependencies.timestamp}</sub>`
+			);
+	}
+
+	await core.summary.write();
 };
 
 /**
