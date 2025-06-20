@@ -111,7 +111,7 @@ jobs:
             exit 1
           fi
 
-      - name: Run metadata-api-find-metadata-dependencies.sh
+      - name: Run Find Metadata Dependencies Script
         id: find-deps
         shell: bash
         continue-on-error: true
@@ -134,7 +134,6 @@ jobs:
           fi
           echo "$ACTIONS_RUNNER_DEBUG"
           ./scripts/find-metadata-dependencies/bash/find-metadata-dependencies.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies-report.json
-          cat dependencies-report.json
 
       - name: Check for Script Errors and Fail if Present
         id: check-errors
