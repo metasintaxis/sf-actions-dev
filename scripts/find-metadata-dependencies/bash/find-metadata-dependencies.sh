@@ -307,20 +307,22 @@ init_script_logging() {
 	if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
 		# GitHub Actions debug mode takes precedence
 		effective_level="${debug_level:-DEBUG}"
+		# Initialize logger first, then log
+		init_logger --level "$effective_level"
 		log_info_stderr "GitHub Actions step debug mode detected"
-		log_debug_stderr "Enabling bash tracing for detailed execution debugging"
-		set -x
-		echo "Debug mode enabled: Bash tracing is ON" >&2
+		log_debug_stderr "Debug mode enabled with level: $effective_level"
 	elif [ -n "$debug_level" ]; then
 		# Manual debug flag provided
 		effective_level="$debug_level"
+		# Initialize logger first, then log
+		init_logger --level "$effective_level"
 		log_debug_stderr "Debug mode enabled with level: $effective_level"
 	else
 		# Default level
 		effective_level="INFO"
+		init_logger --level "$effective_level"
 	fi
 
-	init_logger --level "$effective_level"
 	log_debug_stderr "Logger initialized with level: $effective_level"
 }
 
