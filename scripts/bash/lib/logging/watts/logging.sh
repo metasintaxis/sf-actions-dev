@@ -80,8 +80,8 @@ detect_color_support() {
 		return 0
 	fi
 
-	# Check if stdout is a terminal
-	if [[ ! -t 1 ]]; then
+	# Check if stdout OR stderr is a terminal (important for error messages)
+	if [[ ! -t 1 && ! -t 2 ]]; then
 		return 1
 	fi
 
@@ -114,8 +114,14 @@ should_use_colors() {
 			return 1
 			;;
 		"auto" | *)
-			detect_color_support
-			return $?
+			# Check both stdout and stderr for terminal support
+			# This is important because error messages go to stderr
+			if [[ -t 1 || -t 2 ]]; then
+				detect_color_support
+				return $?
+			else
+				return 1
+			fi
 			;;
 	esac
 }
@@ -726,3 +732,20 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 	echo "Usage: source logging.sh"
 	exit 1
 fi
+
+# Auxiliary function to log debug messages to stderr
+
+# Function to log debug messages to stderr
+log_debug_stderr() {
+	log_debug "$@" >&2
+}
+
+# Function to log info messages to stderr
+log_info_stderr() {
+	log_info "$@" >&2
+}
+
+# Function to log error messages to stderr (for consistency)
+log_error_stderr() {
+	log_error "$@"
+}
