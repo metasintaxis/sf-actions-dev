@@ -10,8 +10,8 @@
 #   It is designed for use in CI/CD pipelines and supports robust error handling.
 #
 # @usage
-#   ./find-metadata-dependencies.sh -s OBJECT [-n NAME] [-d DEVELOPER_NAME] [-m MASTER_LABEL] [-o TARGET_ORG] [--json] [--debug [LEVEL]]
-#   ./find-metadata-dependencies.sh --sobject OBJECT [--name NAME] [--developer-name DEVELOPER_NAME] [--master-label MASTER_LABEL] [--target-org TARGET_ORG] [--json] [--debug [LEVEL]]
+#   ./find-metadata-dependencies.sh -s OBJECT [-n NAME] [-d DEVELOPER_NAME] [-m MASTER_LABEL] [-o TARGET_ORG] [--json] [--log FILE] [--debug [LEVEL]]
+#   ./find-metadata-dependencies.sh --sobject OBJECT [--name NAME] [--developer-name DEVELOPER_NAME] [--master-label MASTER_LABEL] [--target-org TARGET_ORG] [--json] [--log FILE] [--debug [LEVEL]]
 #
 # @options
 #   -s, --sobject          The sObject type (e.g., FlowDefinition, ApexClass, etc.) (required)
@@ -20,6 +20,7 @@
 #   -m, --master-label     The MasterLabel of the component (optional)
 #   -o, --target-org       The alias or username of the target Salesforce org (optional, uses default org if not specified)
 #   --json                 Output result and errors in JSON format.
+#   --log FILE             Write debug and operational logs to specified file
 #   --debug [LEVEL]        Enable debug logging to stderr. Optional LEVEL:
 #                          DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY
 #                          (default: DEBUG if no level specified)
@@ -41,8 +42,8 @@ DEBUG_LEVEL=""
 
 show_usage() {
 	echo "Usage:"
-	echo "  $0 -s OBJECT [-n NAME] [-d DEVELOPER_NAME] [-m MASTER_LABEL] [-o TARGET_ORG] [--json] [--debug [LEVEL]]"
-	echo "  $0 --sobject OBJECT [--name NAME] [--developer-name DEVELOPER_NAME] [--master-label MASTER_LABEL] [--target-org TARGET_ORG] [--json] [--debug [LEVEL]]"
+	echo "  $0 -s OBJECT [-n NAME] [-d DEVELOPER_NAME] [-m MASTER_LABEL] [-o TARGET_ORG] [--json] [--log FILE] [--debug [LEVEL]]"
+	echo "  $0 --sobject OBJECT [--name NAME] [--developer-name DEVELOPER_NAME] [--master-label MASTER_LABEL] [--target-org TARGET_ORG] [--json] [--log FILE] [--debug [LEVEL]]"
 	echo
 	echo "Options:"
 	echo "  -s, --sobject          The sObject type (e.g., FlowDefinition, ApexClass, etc.) (required)"
@@ -51,6 +52,7 @@ show_usage() {
 	echo "  -m, --master-label     The MasterLabel of the component (optional)"
 	echo "  -o, --target-org       The alias or username of the target Salesforce org (optional, uses default org if not specified)"
 	echo "  --json                 Output result and errors in JSON format."
+	echo "  --log FILE             Write debug and operational logs to specified file"
 	echo "  --debug [LEVEL]        Enable debug logging to stderr. Optional LEVEL:"
 	echo "                         DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY"
 	echo "                         (default: DEBUG if no level specified)"
@@ -65,6 +67,7 @@ parse_args() {
 	TARGET_ORG=""
 	local JSON_OUTPUT=false
 	DEBUG_LEVEL=""
+	LOG_FILE="" # Add this line
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -91,6 +94,10 @@ parse_args() {
 			--json)
 				JSON_OUTPUT=true
 				shift
+				;;
+			--log) # Add this case
+				LOG_FILE="$2"
+				shift 2
 				;;
 			--debug)
 				# Check if next argument is a log level or another flag/end of args
@@ -125,7 +132,7 @@ parse_args() {
 		esac
 	done
 
-	echo "$OBJECT|$NAME|$DEVELOPER_NAME|$MASTER_LABEL|$TARGET_ORG|$JSON_OUTPUT|$DEBUG_LEVEL"
+	echo "$OBJECT|$NAME|$DEVELOPER_NAME|$MASTER_LABEL|$TARGET_ORG|$JSON_OUTPUT|$DEBUG_LEVEL|$LOG_FILE" # Add LOG_FILE to output
 }
 
 validate_args() {
@@ -300,27 +307,61 @@ enable_bash_debug() {
 # Function to initialize logging based on environment and arguments
 init_script_logging() {
 	local debug_level="$1"
+	local log_file="$2"
 
 	# Determine the effective debug level
 	local effective_level=""
 
+	# Build logger initialization arguments
+	local logger_args=()
+
 	if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
 		# GitHub Actions debug mode takes precedence
 		effective_level="${debug_level:-DEBUG}"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
 		# Initialize logger first, then log
-		init_logger --level "$effective_level"
+		init_logger "${logger_args[@]}"
 		log_info_stderr "GitHub Actions step debug mode detected"
 		log_debug_stderr "Debug mode enabled with level: $effective_level"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
 	elif [ -n "$debug_level" ]; then
 		# Manual debug flag provided
 		effective_level="$debug_level"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
 		# Initialize logger first, then log
-		init_logger --level "$effective_level"
+		init_logger "${logger_args[@]}"
 		log_debug_stderr "Debug mode enabled with level: $effective_level"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
 	else
 		# Default level
 		effective_level="INFO"
-		init_logger --level "$effective_level"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		init_logger "${logger_args[@]}"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
 	fi
 
 	log_debug_stderr "Logger initialized with level: $effective_level"
@@ -334,17 +375,17 @@ main() {
 
 	local parsed
 	parsed=$(parse_args "$@")
-	IFS='|' read -r OBJECT NAME DEVELOPER_NAME MASTER_LABEL TARGET_ORG JSON_OUTPUT DEBUG_LEVEL <<< "$parsed"
+	IFS='|' read -r OBJECT NAME DEVELOPER_NAME MASTER_LABEL TARGET_ORG JSON_OUTPUT DEBUG_LEVEL LOG_FILE <<< "$parsed" # Add LOG_FILE
 
 	# Initialize logging in one place
-	init_script_logging "$DEBUG_LEVEL"
+	init_script_logging "$DEBUG_LEVEL" "$LOG_FILE" # Pass LOG_FILE
 
 	log_debug_stderr "Starting find-metadata-dependencies.sh with arguments: $*"
 
 	if [ -n "$TARGET_ORG" ]; then
-		log_info_stderr "Parsed arguments - sObject: '$OBJECT', Name: '$NAME', Developer Name: '$DEVELOPER_NAME', Master Label: '$MASTER_LABEL', Target Org: '$TARGET_ORG', JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}"
+		log_info_stderr "Parsed arguments - sObject: '$OBJECT', Name: '$NAME', Developer Name: '$DEVELOPER_NAME', Master Label: '$MASTER_LABEL', Target Org: '$TARGET_ORG', JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}, Log file: ${LOG_FILE:-NONE}"
 	else
-		log_info_stderr "Parsed arguments - sObject: '$OBJECT', Name: '$NAME', Developer Name: '$DEVELOPER_NAME', Master Label: '$MASTER_LABEL', Target Org: default, JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}"
+		log_info_stderr "Parsed arguments - sObject: '$OBJECT', Name: '$NAME', Developer Name: '$DEVELOPER_NAME', Master Label: '$MASTER_LABEL', Target Org: default, JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}, Log file: ${LOG_FILE:-NONE}"
 	fi
 
 	validate_args "$OBJECT" "$NAME" "$DEVELOPER_NAME" "$MASTER_LABEL" "$JSON_OUTPUT"

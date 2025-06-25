@@ -41,18 +41,20 @@ TARGET_ORG=""
 JSON_OUTPUT=false
 SFDX_AUTH_URL_CONDENSED=false
 DEBUG_LEVEL=""
+LOG_FILE="" # Add this line
 
 show_usage() {
 	echo "Usage:"
-	echo "  $0 -o <target-org> [--json] [--debug [LEVEL]]"
-	echo "  $0 --target-org <target-org> [--json] [--debug [LEVEL]]"
-	echo "  $0 -o <target-org> --sfdx-auth-url-condensed [--debug [LEVEL]]"
+	echo "  $0 -o <target-org> [--json] [--log FILE] [--debug [LEVEL]]"
+	echo "  $0 --target-org <target-org> [--json] [--log FILE] [--debug [LEVEL]]"
+	echo "  $0 -o <target-org> --sfdx-auth-url-condensed [--log FILE] [--debug [LEVEL]]"
 	echo
 	echo "Options:"
 	echo "  -o, --target-org                The alias or username of the target Salesforce org."
 	echo "  -h, --help                      Show this help message and exit."
 	echo "  --json                          Output result and errors in JSON format."
 	echo "  --sfdx-auth-url-condensed       Output only the raw JSON from sf in a single line."
+	echo "  --log FILE                      Write debug and operational logs to specified file"
 	echo "  --debug [LEVEL]                 Enable debug logging to stderr. Optional LEVEL:"
 	echo "                                  DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY"
 	echo "                                  (default: DEBUG if no level specified)"
@@ -62,6 +64,7 @@ parse_args() {
 	JSON_OUTPUT=false
 	SFDX_AUTH_URL_CONDENSED=false
 	DEBUG_LEVEL=""
+	LOG_FILE="" # Add this line
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -77,11 +80,16 @@ parse_args() {
 				SFDX_AUTH_URL_CONDENSED=true
 				shift
 				;;
+			--log) # Add this case
+				LOG_FILE="$2"
+				shift 2
+				;;
 			--debug)
 				# Check if next argument is a log level or another flag/end of args
 				if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
-					# Valid log levels
-					case "${2^^}" in
+					# Valid log levels - convert to uppercase using tr
+					local upper_level=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+					case "$upper_level" in
 						DEBUG | INFO | NOTICE | WARN | WARNING | ERROR | ERR | CRITICAL | CRIT | ALERT | EMERGENCY | EMERG | FATAL)
 							DEBUG_LEVEL="$2"
 							shift 2
@@ -205,24 +213,82 @@ check_no_args() {
 	fi
 }
 
+# Function to initialize logging based on environment and arguments
+init_script_logging() {
+	local debug_level="$1"
+	local log_file="$2"
+
+	# Determine the effective debug level
+	local effective_level=""
+
+	# Build logger initialization arguments
+	local logger_args=()
+
+	if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
+		# GitHub Actions debug mode takes precedence
+		effective_level="${debug_level:-DEBUG}"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		# Initialize logger first, then log
+		init_logger "${logger_args[@]}"
+		log_info_stderr "GitHub Actions step debug mode detected"
+		log_debug_stderr "Debug mode enabled with level: $effective_level"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	elif [ -n "$debug_level" ]; then
+		# Manual debug flag provided
+		effective_level="$debug_level"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		# Initialize logger first, then log
+		init_logger "${logger_args[@]}"
+		log_debug_stderr "Debug mode enabled with level: $effective_level"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	else
+		# Default level
+		effective_level="INFO"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		init_logger "${logger_args[@]}"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	fi
+
+	log_debug_stderr "Logger initialized with level: $effective_level"
+}
+
 main() {
 	# Parse arguments first to check for debug flag
 	parse_args "$@"
 
-	# Initialize logging based on debug flag
-	if [ -n "$DEBUG_LEVEL" ]; then
-		init_logger --level "$DEBUG_LEVEL"
-		log_debug_stderr "Debug mode enabled with level: $DEBUG_LEVEL"
-	else
-		init_logger --level INFO
-	fi
+	# Initialize logging based on debug flag and log file
+	init_script_logging "$DEBUG_LEVEL" "$LOG_FILE"
 
 	log_debug_stderr "Starting org-display-auth-info.sh with arguments: $*"
 
 	check_no_args "$@"
 	log_debug_stderr "Arguments validation passed"
 
-	log_info_stderr "Parsed arguments - Target org: '$TARGET_ORG', JSON output: $JSON_OUTPUT, Condensed: $SFDX_AUTH_URL_CONDENSED, Debug level: ${DEBUG_LEVEL:-NONE}"
+	log_info_stderr "Parsed arguments - Target org: '$TARGET_ORG', JSON output: $JSON_OUTPUT, Condensed: $SFDX_AUTH_URL_CONDENSED, Debug level: ${DEBUG_LEVEL:-NONE}, Log file: ${LOG_FILE:-NONE}"
 
 	validate_args
 	log_debug_stderr "Argument validation completed successfully"

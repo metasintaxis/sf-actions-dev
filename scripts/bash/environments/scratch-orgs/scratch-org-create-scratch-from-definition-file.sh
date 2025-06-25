@@ -8,8 +8,8 @@
 # duration, Dev Hub alias, and optional namespace. It supports JSON error output.
 #
 # @usage
-#   ./scratch-org-create-scratch-from-definition-file.sh -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json] [--debug [LEVEL]]
-#   ./scratch-org-create-scratch-from-definition-file.sh --definition-file <definition-file> --alias <alias> --duration-days <duration-days> --target-dev-hub <dev-hub-alias> [--no-namespace] [--json] [--debug [LEVEL]]
+#   ./scratch-org-create-scratch-from-definition-file.sh -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json] [--log FILE] [--debug [LEVEL]]
+#   ./scratch-org-create-scratch-from-definition-file.sh --definition-file <definition-file> --alias <alias> --duration-days <duration-days> --target-dev-hub <dev-hub-alias> [--no-namespace] [--json] [--log FILE] [--debug [LEVEL]]
 #
 # @options
 #   -f, --definition-file    Path to the scratch org definition file.
@@ -18,6 +18,7 @@
 #   -v, --target-dev-hub     Alias for the Dev Hub org to use for scratch org creation.
 #   -m, --no-namespace       Do not use a namespace.
 #   --json                   Output result and errors in JSON format.
+#   --log FILE               Write debug and operational logs to specified file
 #   --debug [LEVEL]          Enable debug logging to stderr. Optional LEVEL:
 #                            DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY
 #                            (default: DEBUG if no level specified)
@@ -46,11 +47,12 @@ SF_DEV_HUB_ALIAS=""
 JSON_OUTPUT=false
 NO_NAMESPACE=false
 DEBUG_LEVEL=""
+LOG_FILE="" # Add this line
 
 show_usage() {
 	echo "Usage:"
-	echo "  $0 -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json] [--debug [LEVEL]]"
-	echo "  $0 --definition-file <definition-file> --alias <alias> --duration-days <duration-days> --target-dev-hub <dev-hub-alias> [--no-namespace] [--json] [--debug [LEVEL]]"
+	echo "  $0 -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json] [--log FILE] [--debug [LEVEL]]"
+	echo "  $0 --definition-file <definition-file> --alias <alias> --duration-days <duration-days> --target-dev-hub <dev-hub-alias> [--no-namespace] [--json] [--log FILE] [--debug [LEVEL]]"
 	echo
 	echo "Options:"
 	echo "  -f, --definition-file     Path to the scratch org definition file."
@@ -59,6 +61,7 @@ show_usage() {
 	echo "  -v, --target-dev-hub     Alias for the Dev Hub org to use for scratch org creation."
 	echo "  -m, --no-namespace       Do not use a namespace."
 	echo "  --json                   Output result and errors in JSON format."
+	echo "  --log FILE               Write debug and operational logs to specified file"
 	echo "  --debug [LEVEL]          Enable debug logging to stderr. Optional LEVEL:"
 	echo "                           DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY"
 	echo "                           (default: DEBUG if no level specified)"
@@ -69,6 +72,7 @@ parse_args() {
 	JSON_OUTPUT=false
 	NO_NAMESPACE=false
 	DEBUG_LEVEL=""
+	LOG_FILE="" # Add this line
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -96,11 +100,16 @@ parse_args() {
 				JSON_OUTPUT=true
 				shift
 				;;
+			--log) # Add this case
+				LOG_FILE="$2"
+				shift 2
+				;;
 			--debug)
 				# Check if next argument is a log level or another flag/end of args
 				if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
-					# Valid log levels
-					case "${2^^}" in
+					# Valid log levels - convert to uppercase using tr
+					local upper_level=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+					case "$upper_level" in
 						DEBUG | INFO | NOTICE | WARN | WARNING | ERROR | ERR | CRITICAL | CRIT | ALERT | EMERGENCY | EMERG | FATAL)
 							DEBUG_LEVEL="$2"
 							shift 2
@@ -128,7 +137,7 @@ parse_args() {
 		esac
 	done
 
-	echo "$DEFINITION_FILE|$SCRATCH_ALIAS|$DURATION_DAYS|$SF_DEV_HUB_ALIAS|$NO_NAMESPACE|$JSON_OUTPUT|$DEBUG_LEVEL"
+	echo "$DEFINITION_FILE|$SCRATCH_ALIAS|$DURATION_DAYS|$SF_DEV_HUB_ALIAS|$NO_NAMESPACE|$JSON_OUTPUT|$DEBUG_LEVEL|$LOG_FILE" # Add LOG_FILE
 }
 
 validate_args() {
@@ -342,6 +351,69 @@ run_scratch_org_creation() {
 	output_final_result "$FINAL_JSON" "$JSON_OUTPUT"
 }
 
+# Function to initialize logging based on environment and arguments
+init_script_logging() {
+	local debug_level="$1"
+	local log_file="$2"
+
+	# Determine the effective debug level
+	local effective_level=""
+
+	# Build logger initialization arguments
+	local logger_args=()
+
+	if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
+		# GitHub Actions debug mode takes precedence
+		effective_level="${debug_level:-DEBUG}"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		# Initialize logger first, then log
+		init_logger "${logger_args[@]}"
+		log_info_stderr "GitHub Actions step debug mode detected"
+		log_debug_stderr "Debug mode enabled with level: $effective_level"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	elif [ -n "$debug_level" ]; then
+		# Manual debug flag provided
+		effective_level="$debug_level"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		# Initialize logger first, then log
+		init_logger "${logger_args[@]}"
+		log_debug_stderr "Debug mode enabled with level: $effective_level"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	else
+		# Default level
+		effective_level="INFO"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		init_logger "${logger_args[@]}"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	fi
+
+	log_debug_stderr "Logger initialized with level: $effective_level"
+}
+
 main() {
 	if [ $# -eq 0 ]; then
 		show_usage
@@ -350,18 +422,13 @@ main() {
 
 	local parsed
 	parsed=$(parse_args "$@")
-	IFS='|' read -r DEFINITION_FILE SCRATCH_ALIAS DURATION_DAYS SF_DEV_HUB_ALIAS NO_NAMESPACE JSON_OUTPUT DEBUG_LEVEL <<< "$parsed"
+	IFS='|' read -r DEFINITION_FILE SCRATCH_ALIAS DURATION_DAYS SF_DEV_HUB_ALIAS NO_NAMESPACE JSON_OUTPUT DEBUG_LEVEL LOG_FILE <<< "$parsed" # Add LOG_FILE
 
-	# Initialize logging based on debug flag
-	if [ -n "$DEBUG_LEVEL" ]; then
-		init_logger --level "$DEBUG_LEVEL"
-		log_debug_stderr "Debug mode enabled with level: $DEBUG_LEVEL"
-	else
-		init_logger --level INFO
-	fi
+	# Initialize logging based on debug flag and log file
+	init_script_logging "$DEBUG_LEVEL" "$LOG_FILE"
 
 	log_debug_stderr "Starting scratch-org-create-scratch-from-definition-file.sh with arguments: $*"
-	log_info_stderr "Parsed arguments - Definition file: '$DEFINITION_FILE', Alias: '$SCRATCH_ALIAS', Duration: $DURATION_DAYS days, Dev Hub: '$SF_DEV_HUB_ALIAS', No namespace: $NO_NAMESPACE, JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}"
+	log_info_stderr "Parsed arguments - Definition file: '$DEFINITION_FILE', Alias: '$SCRATCH_ALIAS', Duration: $DURATION_DAYS days, Dev Hub: '$SF_DEV_HUB_ALIAS', No namespace: $NO_NAMESPACE, JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}, Log file: ${LOG_FILE:-NONE}"
 
 	validate_args "$DEFINITION_FILE" "$SCRATCH_ALIAS" "$DURATION_DAYS" "$SF_DEV_HUB_ALIAS" "$JSON_OUTPUT"
 	log_debug_stderr "Argument validation completed successfully"
