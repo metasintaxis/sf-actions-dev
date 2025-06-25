@@ -133,7 +133,7 @@ jobs:
             exit 1
           fi
           echo "$ACTIONS_RUNNER_DEBUG"
-          ./scripts/find-metadata-dependencies/bash/find-metadata-dependencies.sh -o "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies-report.json
+          ./scripts/find-metadata-dependencies/bash/find-metadata-dependencies.sh -s "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies-report.json
           cat dependencies-report.json
 
       - name: Check for Script Errors and Fail if Present

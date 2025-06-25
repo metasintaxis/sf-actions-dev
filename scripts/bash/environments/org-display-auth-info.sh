@@ -17,6 +17,9 @@
 #   -h, --help                      Show this help message and exit.
 #   --json                          Output result and errors in JSON format.
 #   --sfdx-auth-url-condensed       Output only the raw JSON from sf in a single line.
+#   --debug [LEVEL]                 Enable debug logging to stderr. Optional LEVEL:
+#                                  DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY
+#                                  (default: DEBUG if no level specified)
 #
 # @example
 #   ./org-display-auth-info.sh -o my-org --json
@@ -32,27 +35,34 @@ set -euo pipefail
 # Get the directory of the current script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib/output-utils.sh"
+source "${SCRIPT_DIR}/../lib/logging/watts/logging.sh"
 
 TARGET_ORG=""
 JSON_OUTPUT=false
 SFDX_AUTH_URL_CONDENSED=false
+DEBUG_LEVEL=""
 
 show_usage() {
 	echo "Usage:"
-	echo "  $0 -o <target-org> [--json]"
-	echo "  $0 --target-org <target-org> [--json]"
-	echo "  $0 -o <target-org> --sfdx-auth-url-condensed"
+	echo "  $0 -o <target-org> [--json] [--debug [LEVEL]]"
+	echo "  $0 --target-org <target-org> [--json] [--debug [LEVEL]]"
+	echo "  $0 -o <target-org> --sfdx-auth-url-condensed [--debug [LEVEL]]"
 	echo
 	echo "Options:"
 	echo "  -o, --target-org                The alias or username of the target Salesforce org."
 	echo "  -h, --help                      Show this help message and exit."
 	echo "  --json                          Output result and errors in JSON format."
 	echo "  --sfdx-auth-url-condensed       Output only the raw JSON from sf in a single line."
+	echo "  --debug [LEVEL]                 Enable debug logging to stderr. Optional LEVEL:"
+	echo "                                  DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY"
+	echo "                                  (default: DEBUG if no level specified)"
 }
 
 parse_args() {
 	JSON_OUTPUT=false
 	SFDX_AUTH_URL_CONDENSED=false
+	DEBUG_LEVEL=""
+
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			-o | --target-org)
@@ -67,6 +77,27 @@ parse_args() {
 				SFDX_AUTH_URL_CONDENSED=true
 				shift
 				;;
+			--debug)
+				# Check if next argument is a log level or another flag/end of args
+				if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+					# Valid log levels
+					case "${2^^}" in
+						DEBUG | INFO | NOTICE | WARN | WARNING | ERROR | ERR | CRITICAL | CRIT | ALERT | EMERGENCY | EMERG | FATAL)
+							DEBUG_LEVEL="$2"
+							shift 2
+							;;
+						*)
+							# Not a valid log level, use default DEBUG
+							DEBUG_LEVEL="DEBUG"
+							shift
+							;;
+					esac
+				else
+					# No level specified, use default DEBUG
+					DEBUG_LEVEL="DEBUG"
+					shift
+				fi
+				;;
 			-h | --help)
 				show_usage
 				exit 0
@@ -80,7 +111,10 @@ parse_args() {
 }
 
 check_dependencies() {
+	log_debug_stderr "Checking script dependencies"
+
 	if ! command -v jq > /dev/null 2>&1; then
+		log_error_stderr "Missing dependency: jq is not installed"
 		local msg="Error: jq is required but not installed."
 		local detail="Install jq to continue."
 		local func="${FUNCNAME[0]}"
@@ -91,8 +125,10 @@ check_dependencies() {
 		fi
 		exit 1
 	fi
+	log_debug_stderr "jq dependency check passed"
 
 	if ! command -v sf > /dev/null 2>&1; then
+		log_error_stderr "Missing dependency: Salesforce CLI (sf) is not installed"
 		local msg="Error: Salesforce CLI (sf) is not installed."
 		local detail="Install Salesforce CLI to continue."
 		local func="${FUNCNAME[0]}"
@@ -103,10 +139,13 @@ check_dependencies() {
 		fi
 		exit 1
 	fi
+	log_debug_stderr "Salesforce CLI dependency check passed"
 }
 
 validate_args() {
+	log_debug_stderr "Validating required arguments"
 	if [ -z "$TARGET_ORG" ]; then
+		log_error_stderr "Missing required argument: target org not specified"
 		local msg="Error: target org must be specified with -o/--target-org"
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
@@ -116,10 +155,15 @@ validate_args() {
 		fi
 		exit 1
 	fi
+	log_debug_stderr "All required arguments are present"
 }
 
 run_sf_command() {
+	log_info_stderr "Executing sf org display command for org: '$TARGET_ORG'"
+	log_debug_stderr "Running: sf org display --target-org '$TARGET_ORG' --verbose --json"
+
 	if ! FINAL_JSON=$(sf org display --target-org "$TARGET_ORG" --verbose --json 2> /dev/null); then
+		log_error_stderr "sf org display command failed for org: '$TARGET_ORG'"
 		local msg="Failed to retrieve org authentication information for '$TARGET_ORG'."
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
@@ -129,19 +173,29 @@ run_sf_command() {
 		fi
 		exit 1
 	fi
+
+	log_debug_stderr "sf command executed successfully, response length: ${#FINAL_JSON} characters"
 }
 
 output_final_result() {
+	log_debug_stderr "Preparing output in requested format"
+
 	local SUCCESS_STATUS="OK"
 	local message="Org authentication information retrieved successfully."
 	local detail="$FINAL_JSON"
+
 	if [ "$SFDX_AUTH_URL_CONDENSED" = true ]; then
+		log_debug_stderr "Outputting condensed JSON format"
 		echo "$FINAL_JSON" | jq -c .
 	elif [ "$JSON_OUTPUT" = true ]; then
+		log_debug_stderr "Outputting structured JSON format"
 		print_standard_json "$SUCCESS_STATUS" "$message" "$detail"
 	else
+		log_debug_stderr "Outputting human-readable format"
 		print_standard_block "$SUCCESS_STATUS" "$message" "$detail"
 	fi
+
+	log_debug_stderr "Output formatting completed"
 }
 
 check_no_args() {
@@ -152,12 +206,35 @@ check_no_args() {
 }
 
 main() {
-	check_no_args "$@"
+	# Parse arguments first to check for debug flag
 	parse_args "$@"
+
+	# Initialize logging based on debug flag
+	if [ -n "$DEBUG_LEVEL" ]; then
+		init_logger --level "$DEBUG_LEVEL"
+		log_debug_stderr "Debug mode enabled with level: $DEBUG_LEVEL"
+	else
+		init_logger --level INFO
+	fi
+
+	log_debug_stderr "Starting org-display-auth-info.sh with arguments: $*"
+
+	check_no_args "$@"
+	log_debug_stderr "Arguments validation passed"
+
+	log_info_stderr "Parsed arguments - Target org: '$TARGET_ORG', JSON output: $JSON_OUTPUT, Condensed: $SFDX_AUTH_URL_CONDENSED, Debug level: ${DEBUG_LEVEL:-NONE}"
+
 	validate_args
+	log_debug_stderr "Argument validation completed successfully"
+
 	check_dependencies
+	log_debug_stderr "Dependency checks completed successfully"
+
 	run_sf_command
+	log_info_stderr "Successfully retrieved org information for '$TARGET_ORG'"
+
 	output_final_result
+	log_debug_stderr "Script execution completed successfully"
 }
 
 main "$@"
