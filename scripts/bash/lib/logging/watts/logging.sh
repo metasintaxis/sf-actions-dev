@@ -9,15 +9,19 @@
 #   init_logger [-l|--log FILE] [-q|--quiet] [-v|--verbose] [-d|--level LEVEL] [-f|--format FORMAT] [-j|--journal] [-t|--tag TAG] [--color] [--no-color]
 #
 # Functions provided:
-#   log_debug "message"      - Log debug level message
+#   log_debug "message"      - Log debug level message (includes caller info: function:line)
 #   log_info "message"       - Log info level message
 #   log_notice "message"     - Log notice level message
 #   log_warn "message"       - Log warning level message
-#   log_error "message"      - Log error level message
-#   log_critical "message"   - Log critical level message
-#   log_alert "message"      - Log alert level message
-#   log_emergency "message"  - Log emergency level message (system unusable)
+#   log_error "message"      - Log error level message (includes caller info: function:line)
+#   log_critical "message"   - Log critical level message (includes caller info: function:line)
+#   log_alert "message"      - Log alert level message (includes caller info: function:line)
+#   log_emergency "message"  - Log emergency level message (includes caller info: function:line)
 #   log_sensitive "message"  - Log sensitive message (console only, never to file or journal)
+#
+# Caller Information:
+#   DEBUG and ERROR level messages automatically include caller information in the format:
+#   [function_name:line_number] message
 #
 # Log Levels (following complete syslog standard):
 #   7 = DEBUG (most verbose/least severe)
@@ -241,10 +245,12 @@ get_syslog_priority() {
 	esac
 }
 
-# Function to format log message
+# Enhanced format_log_message function with caller info support
 format_log_message() {
 	local level_name="$1"
 	local message="$2"
+	local caller_line="${3:-}"
+	local caller_func="${4:-}"
 
 	# Get timestamp in appropriate timezone
 	local current_date
@@ -257,25 +263,31 @@ format_log_message() {
 		timezone_str="LOCAL"
 	fi
 
-	# Replace format variables using parameter expansion (safer and more reliable)
+	# Replace format variables using parameter expansion
 	local formatted_message="$LOG_FORMAT"
 
-	# Use parameter expansion which is more reliable than sed for simple replacements
 	formatted_message="${formatted_message//%d/$current_date}"
 	formatted_message="${formatted_message//%l/$level_name}"
 	formatted_message="${formatted_message//%s/${SCRIPT_NAME:-unknown}}"
 	formatted_message="${formatted_message//%z/$timezone_str}"
-	# Handle %m last to avoid conflicts with other replacements
-	formatted_message="${formatted_message//%m/$message}"
+
+	# Add caller information for debug and error messages
+	if [[ -n "$caller_line" && -n "$caller_func" && ("$level_name" == "DEBUG" || "$level_name" == "ERROR") ]]; then
+		formatted_message="${formatted_message//%m/[$caller_func:$caller_line] $message}"
+	else
+		formatted_message="${formatted_message//%m/$message}"
+	fi
 
 	echo "$formatted_message"
 }
 
 # Function to initialize logger with custom settings
 init_logger() {
-	# Get the calling script's name
+	# Get the calling script's name - look further up the call stack
 	local caller_script
-	if [[ -n "${BASH_SOURCE[1]}" ]]; then
+	if [[ -n "${BASH_SOURCE[2]}" ]]; then
+		caller_script=$(basename "${BASH_SOURCE[2]}")
+	elif [[ -n "${BASH_SOURCE[1]}" ]]; then
 		caller_script=$(basename "${BASH_SOURCE[1]}")
 	else
 		caller_script="unknown"
@@ -382,7 +394,7 @@ init_logger() {
 	fi
 
 	# Log initialization success
-	log_debug "Logger initialized by '$caller_script' with: console=$CONSOLE_LOG, file=$LOG_FILE, journal=$USE_JOURNAL, colors=$USE_COLORS, log level=$(get_log_level_name $CURRENT_LOG_LEVEL), format=\"$LOG_FORMAT\""
+	log_debug_stderr "Logger initialized by '$caller_script' with: console=$CONSOLE_LOG, file=$LOG_FILE, journal=$USE_JOURNAL, colors=$USE_COLORS, log level=$(get_log_level_name $CURRENT_LOG_LEVEL), format=\"$LOG_FORMAT\""
 	return 0
 }
 
@@ -581,13 +593,15 @@ set_color_mode() {
 	fi
 }
 
-# Function to log messages with different severity levels
+# Enhanced log_message function to handle caller info
 log_message() {
 	local level_name="$1"
 	local level_value="$2"
 	local message="$3"
 	local skip_file="${4:-false}"
 	local skip_journal="${5:-false}"
+	local caller_line="${6:-}"
+	local caller_func="${7:-}"
 
 	# Skip logging if message level is more verbose than current log level
 	# With syslog-style levels, HIGHER values are LESS severe (more verbose)
@@ -595,8 +609,8 @@ log_message() {
 		return
 	fi
 
-	# Format the log entry
-	local log_entry=$(format_log_message "$level_name" "$message")
+	# Format the log entry with caller info
+	local log_entry=$(format_log_message "$level_name" "$message" "$caller_line" "$caller_func")
 
 	# If CONSOLE_LOG is true, print to console
 	if [[ "$CONSOLE_LOG" == "true" ]]; then
@@ -678,9 +692,11 @@ log_message() {
 	fi
 }
 
-# Helper functions for different log levels
+# Helper functions for different log levels with caller info
 log_debug() {
-	log_message "DEBUG" $LOG_LEVEL_DEBUG "$1"
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "DEBUG" $LOG_LEVEL_DEBUG "$1" "false" "false" "$caller_line" "$caller_func"
 }
 
 log_info() {
@@ -696,24 +712,34 @@ log_warn() {
 }
 
 log_error() {
-	log_message "ERROR" $LOG_LEVEL_ERROR "$1"
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "ERROR" $LOG_LEVEL_ERROR "$1" "false" "false" "$caller_line" "$caller_func"
 }
 
 log_critical() {
-	log_message "CRITICAL" $LOG_LEVEL_CRITICAL "$1"
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "CRITICAL" $LOG_LEVEL_CRITICAL "$1" "false" "false" "$caller_line" "$caller_func"
 }
 
 log_alert() {
-	log_message "ALERT" $LOG_LEVEL_ALERT "$1"
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "ALERT" $LOG_LEVEL_ALERT "$1" "false" "false" "$caller_line" "$caller_func"
 }
 
 log_emergency() {
-	log_message "EMERGENCY" $LOG_LEVEL_EMERGENCY "$1"
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "EMERGENCY" $LOG_LEVEL_EMERGENCY "$1" "false" "false" "$caller_line" "$caller_func"
 }
 
 # Alias for backward compatibility
 log_fatal() {
-	log_message "FATAL" $LOG_LEVEL_EMERGENCY "$1"
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "FATAL" $LOG_LEVEL_EMERGENCY "$1" "false" "false" "$caller_line" "$caller_func"
 }
 
 log_init() {
@@ -733,19 +759,165 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 	exit 1
 fi
 
-# Auxiliary function to log debug messages to stderr
-
-# Function to log debug messages to stderr
+# Stderr wrapper functions that force output to stderr
 log_debug_stderr() {
-	log_debug "$@" >&2
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+
+	# Skip logging if message level is more verbose than current log level
+	if [[ "$LOG_LEVEL_DEBUG" -gt "$CURRENT_LOG_LEVEL" ]]; then
+		return
+	fi
+
+	# Format the log entry with caller info
+	local log_entry=$(format_log_message "DEBUG" "$1" "$caller_line" "$caller_func")
+
+	# Force output to stderr
+	if [[ "$CONSOLE_LOG" == "true" ]]; then
+		if should_use_colors; then
+			printf "\033[34m%s\033[0m\n" "$log_entry" >&2 # Blue, to stderr
+		else
+			printf "%s\n" "$log_entry" >&2 # To stderr
+		fi
+	fi
+
+	# Log to file and journal as usual
+	if [[ -n "$LOG_FILE" ]]; then
+		echo "${log_entry}" >> "$LOG_FILE" 2> /dev/null
+	fi
+
+	if [[ "$USE_JOURNAL" == "true" ]]; then
+		if check_logger_available; then
+			local syslog_priority=$(get_syslog_priority "$LOG_LEVEL_DEBUG")
+			local plain_message=$(printf '%s\n' "$1" | sed 's/\x1b\[[0-9;]*m//g')
+			logger -p "daemon.${syslog_priority}" -t "${JOURNAL_TAG:-$SCRIPT_NAME}" "$plain_message"
+		fi
+	fi
 }
 
-# Function to log info messages to stderr
 log_info_stderr() {
-	log_info "$@" >&2
+	# Skip logging if message level is more verbose than current log level
+	if [[ "$LOG_LEVEL_INFO" -gt "$CURRENT_LOG_LEVEL" ]]; then
+		return
+	fi
+
+	# Format the log entry
+	local log_entry=$(format_log_message "INFO" "$1")
+
+	# Force output to stderr
+	if [[ "$CONSOLE_LOG" == "true" ]]; then
+		if should_use_colors; then
+			printf "%s\n" "$log_entry" >&2 # Default color, to stderr
+		else
+			printf "%s\n" "$log_entry" >&2 # To stderr
+		fi
+	fi
+
+	# Log to file and journal as usual
+	if [[ -n "$LOG_FILE" ]]; then
+		echo "${log_entry}" >> "$LOG_FILE" 2> /dev/null
+	fi
+
+	if [[ "$USE_JOURNAL" == "true" ]]; then
+		if check_logger_available; then
+			local syslog_priority=$(get_syslog_priority "$LOG_LEVEL_INFO")
+			local plain_message=$(printf '%s\n' "$1" | sed 's/\x1b\[[0-9;]*m//g')
+			logger -p "daemon.${syslog_priority}" -t "${JOURNAL_TAG:-$SCRIPT_NAME}" "$plain_message"
+		fi
+	fi
 }
 
-# Function to log error messages to stderr (for consistency)
+log_notice_stderr() {
+	# Skip logging if message level is more verbose than current log level
+	if [[ "$LOG_LEVEL_NOTICE" -gt "$CURRENT_LOG_LEVEL" ]]; then
+		return
+	fi
+
+	# Format the log entry
+	local log_entry=$(format_log_message "NOTICE" "$1")
+
+	# Force output to stderr
+	if [[ "$CONSOLE_LOG" == "true" ]]; then
+		if should_use_colors; then
+			printf "\033[32m%s\033[0m\n" "$log_entry" >&2 # Green, to stderr
+		else
+			printf "%s\n" "$log_entry" >&2 # To stderr
+		fi
+	fi
+
+	# Log to file and journal as usual
+	if [[ -n "$LOG_FILE" ]]; then
+		echo "${log_entry}" >> "$LOG_FILE" 2> /dev/null
+	fi
+
+	if [[ "$USE_JOURNAL" == "true" ]]; then
+		if check_logger_available; then
+			local syslog_priority=$(get_syslog_priority "$LOG_LEVEL_NOTICE")
+			local plain_message=$(printf '%s\n' "$1" | sed 's/\x1b\[[0-9;]*m//g')
+			logger -p "daemon.${syslog_priority}" -t "${JOURNAL_TAG:-$SCRIPT_NAME}" "$plain_message"
+		fi
+	fi
+}
+
+log_warn_stderr() {
+	# Skip logging if message level is more verbose than current log level
+	if [[ "$LOG_LEVEL_WARN" -gt "$CURRENT_LOG_LEVEL" ]]; then
+		return
+	fi
+
+	# Format the log entry
+	local log_entry=$(format_log_message "WARN" "$1")
+
+	# Force output to stderr
+	if [[ "$CONSOLE_LOG" == "true" ]]; then
+		if should_use_colors; then
+			printf "\033[33m%s\033[0m\n" "$log_entry" >&2 # Yellow, to stderr
+		else
+			printf "%s\n" "$log_entry" >&2 # To stderr
+		fi
+	fi
+
+	# Log to file and journal as usual
+	if [[ -n "$LOG_FILE" ]]; then
+		echo "${log_entry}" >> "$LOG_FILE" 2> /dev/null
+	fi
+
+	if [[ "$USE_JOURNAL" == "true" ]]; then
+		if check_logger_available; then
+			local syslog_priority=$(get_syslog_priority "$LOG_LEVEL_WARN")
+			local plain_message=$(printf '%s\n' "$1" | sed 's/\x1b\[[0-9;]*m//g')
+			logger -p "daemon.${syslog_priority}" -t "${JOURNAL_TAG:-$SCRIPT_NAME}" "$plain_message"
+		fi
+	fi
+}
+
+# The error functions can stay as they are since they already go to stderr
 log_error_stderr() {
-	log_error "$@"
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "ERROR" $LOG_LEVEL_ERROR "$1" "false" "false" "$caller_line" "$caller_func"
+}
+
+log_critical_stderr() {
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "CRITICAL" $LOG_LEVEL_CRITICAL "$1" "false" "false" "$caller_line" "$caller_func"
+}
+
+log_alert_stderr() {
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "ALERT" $LOG_LEVEL_ALERT "$1" "false" "false" "$caller_line" "$caller_func"
+}
+
+log_emergency_stderr() {
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "EMERGENCY" $LOG_LEVEL_EMERGENCY "$1" "false" "false" "$caller_line" "$caller_func"
+}
+
+log_fatal_stderr() {
+	local caller_line="${BASH_LINENO[0]}"
+	local caller_func="${FUNCNAME[1]}"
+	log_message "FATAL" $LOG_LEVEL_EMERGENCY "$1" "false" "false" "$caller_line" "$caller_func"
 }
