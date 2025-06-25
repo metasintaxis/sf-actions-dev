@@ -133,8 +133,11 @@ jobs:
             exit 1
           fi
           echo "$ACTIONS_RUNNER_DEBUG"
-          ./scripts/find-metadata-dependencies/bash/find-metadata-dependencies.sh -s "$COMPONENT_TYPE" $FLAG "$COMPONENT_NAME" --json > dependencies-report.json
-          cat dependencies-report.json
+          ./scripts/find-metadata-dependencies/bash/find-metadata-dependencies.sh \
+            -s "$COMPONENT_TYPE" \
+            $FLAG "$COMPONENT_NAME" \
+            --json \
+            --log "./find-metadata-dependencies.log" > dependencies-report.json
 
       - name: Check for Script Errors and Fail if Present
         id: check-errors
@@ -174,3 +177,10 @@ jobs:
           exit 1
         env:
           GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
+
+      - name: Upload log files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Script Logs
+          path: "*.log"
