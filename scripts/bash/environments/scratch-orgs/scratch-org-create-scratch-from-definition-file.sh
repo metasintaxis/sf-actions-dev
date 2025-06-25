@@ -34,6 +34,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../lib/output-utils.sh"
 
+# Global variables for script parameters
+DEFINITION_FILE=""
+SCRATCH_ALIAS=""
+DURATION_DAYS=""
+SF_DEV_HUB_ALIAS=""
+JSON_OUTPUT=false
+NO_NAMESPACE=false
+
 show_usage() {
 	echo "Usage:"
 	echo "  $0 -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json]"
@@ -51,12 +59,6 @@ show_usage() {
 
 parse_args() {
 	local args=("$@")
-	local DEFINITION_FILE=""
-	local SCRATCH_ALIAS=""
-	local DURATION_DAYS=""
-	local SF_DEV_HUB_ALIAS=""
-	local JSON_OUTPUT=false
-	local NO_NAMESPACE=false
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -180,22 +182,26 @@ start_scratch_org_creation() {
 	echo "$CREATE_OUTPUT"
 }
 
-extract_job_id() {
-	local CREATE_OUTPUT="$1"
-	local JSON_OUTPUT="$2"
-	local JOB_ID
-	JOB_ID=$(echo "$CREATE_OUTPUT" | jq -r '.result.scratchOrgInfo.Id')
-	if [ -z "$JOB_ID" ] || [ "$JOB_ID" = "null" ]; then
+get_job_id() {
+	local create_output="$1"
+	echo "$create_output" | jq -r '.result.scratchOrgInfo.Id // empty'
+}
+
+check_job_id() {
+	local job_id="$1"
+	local create_output="$2"
+	local json_output="$3"
+
+	if [ -z "$job_id" ] || [ "$job_id" = "null" ]; then
 		local msg="Error: Could not extract job ID from scratch org creation output."
 		local func="${FUNCNAME[0]}"
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "$CREATE_OUTPUT" "NO_JOB_ID" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+		if [ "$json_output" = true ]; then
+			print_error_json "$msg" "$create_output" "NO_JOB_ID" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		else
-			print_error_block "$msg" "$CREATE_OUTPUT" "NO_JOB_ID" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
+			print_error_block "$msg" "$create_output" "NO_JOB_ID" "${LINENO[0]}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
-	echo "$JOB_ID"
 }
 
 show_progress() {
@@ -254,13 +260,22 @@ run_scratch_org_creation() {
 		echo "$CREATE_OUTPUT"
 		exit 0
 	fi
-	JOB_ID=$(extract_job_id "$CREATE_OUTPUT" "$JSON_OUTPUT")
+
+	# Extract job ID using dedicated extraction function
+	JOB_ID=$(get_job_id "$CREATE_OUTPUT")
+	# Validate the extracted job ID using separate validation function
+	check_job_id "$JOB_ID" "$CREATE_OUTPUT" "$JSON_OUTPUT"
 	show_progress "$JOB_ID"
 	FINAL_JSON=$(get_final_json_output "$JOB_ID" "$CREATE_OUTPUT" "$JSON_OUTPUT")
 	output_final_result "$FINAL_JSON" "$JSON_OUTPUT"
 }
 
 main() {
+	if [ $# -eq 0 ]; then
+		show_usage
+		exit 1
+	fi
+
 	local parsed
 	parsed=$(parse_args "$@")
 	IFS='|' read -r DEFINITION_FILE SCRATCH_ALIAS DURATION_DAYS SF_DEV_HUB_ALIAS NO_NAMESPACE JSON_OUTPUT <<< "$parsed"
