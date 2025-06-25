@@ -8,8 +8,8 @@
 # duration, Dev Hub alias, and optional namespace. It supports JSON error output.
 #
 # @usage
-#   ./scratch-org-create-scratch-from-definition-file.sh -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json]
-#   ./scratch-org-create-scratch-from-definition-file.sh --definition-file <definition-file> --alias <alias> --duration-days <duration-days> --target-dev-hub <dev-hub-alias> [--no-namespace] [--json]
+#   ./scratch-org-create-scratch-from-definition-file.sh -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json] [--debug [LEVEL]]
+#   ./scratch-org-create-scratch-from-definition-file.sh --definition-file <definition-file> --alias <alias> --duration-days <duration-days> --target-dev-hub <dev-hub-alias> [--no-namespace] [--json] [--debug [LEVEL]]
 #
 # @options
 #   -f, --definition-file    Path to the scratch org definition file.
@@ -18,6 +18,9 @@
 #   -v, --target-dev-hub     Alias for the Dev Hub org to use for scratch org creation.
 #   -m, --no-namespace       Do not use a namespace.
 #   --json                   Output result and errors in JSON format.
+#   --debug [LEVEL]          Enable debug logging to stderr. Optional LEVEL:
+#                            DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY
+#                            (default: DEBUG if no level specified)
 #   --help                   Show this help message and exit.
 #
 # @example
@@ -33,6 +36,7 @@ set -euo pipefail
 # Get the directory of the current script
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../lib/output-utils.sh"
+source "${SCRIPT_DIR}/../../lib/logging/watts/logging.sh"
 
 # Global variables for script parameters
 DEFINITION_FILE=""
@@ -41,11 +45,12 @@ DURATION_DAYS=""
 SF_DEV_HUB_ALIAS=""
 JSON_OUTPUT=false
 NO_NAMESPACE=false
+DEBUG_LEVEL=""
 
 show_usage() {
 	echo "Usage:"
-	echo "  $0 -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json]"
-	echo "  $0 --definition-file <definition-file> --alias <alias> --duration-days <duration-days> --target-dev-hub <dev-hub-alias> [--no-namespace] [--json]"
+	echo "  $0 -f <definition-file> -a <alias> -y <duration-days> -v <dev-hub-alias> [-m] [--json] [--debug [LEVEL]]"
+	echo "  $0 --definition-file <definition-file> --alias <alias> --duration-days <duration-days> --target-dev-hub <dev-hub-alias> [--no-namespace] [--json] [--debug [LEVEL]]"
 	echo
 	echo "Options:"
 	echo "  -f, --definition-file     Path to the scratch org definition file."
@@ -54,11 +59,16 @@ show_usage() {
 	echo "  -v, --target-dev-hub     Alias for the Dev Hub org to use for scratch org creation."
 	echo "  -m, --no-namespace       Do not use a namespace."
 	echo "  --json                   Output result and errors in JSON format."
+	echo "  --debug [LEVEL]          Enable debug logging to stderr. Optional LEVEL:"
+	echo "                           DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY"
+	echo "                           (default: DEBUG if no level specified)"
 	echo "  --help                   Show this help message and exit."
 }
 
 parse_args() {
-	local args=("$@")
+	JSON_OUTPUT=false
+	NO_NAMESPACE=false
+	DEBUG_LEVEL=""
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
@@ -86,6 +96,27 @@ parse_args() {
 				JSON_OUTPUT=true
 				shift
 				;;
+			--debug)
+				# Check if next argument is a log level or another flag/end of args
+				if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+					# Valid log levels
+					case "${2^^}" in
+						DEBUG | INFO | NOTICE | WARN | WARNING | ERROR | ERR | CRITICAL | CRIT | ALERT | EMERGENCY | EMERG | FATAL)
+							DEBUG_LEVEL="$2"
+							shift 2
+							;;
+						*)
+							# Not a valid log level, use default DEBUG
+							DEBUG_LEVEL="DEBUG"
+							shift
+							;;
+					esac
+				else
+					# No level specified, use default DEBUG
+					DEBUG_LEVEL="DEBUG"
+					shift
+				fi
+				;;
 			--help)
 				show_usage
 				exit 0
@@ -97,7 +128,7 @@ parse_args() {
 		esac
 	done
 
-	echo "$DEFINITION_FILE|$SCRATCH_ALIAS|$DURATION_DAYS|$SF_DEV_HUB_ALIAS|$NO_NAMESPACE|$JSON_OUTPUT"
+	echo "$DEFINITION_FILE|$SCRATCH_ALIAS|$DURATION_DAYS|$SF_DEV_HUB_ALIAS|$NO_NAMESPACE|$JSON_OUTPUT|$DEBUG_LEVEL"
 }
 
 validate_args() {
@@ -106,7 +137,10 @@ validate_args() {
 	local DURATION_DAYS="$3"
 	local SF_DEV_HUB_ALIAS="$4"
 	local JSON_OUTPUT="$5"
+
+	log_debug_stderr "Validating required arguments"
 	if [ -z "$DEFINITION_FILE" ] || [ -z "$SCRATCH_ALIAS" ] || [ -z "$DURATION_DAYS" ] || [ -z "$SF_DEV_HUB_ALIAS" ]; then
+		log_error_stderr "Missing required arguments: definition file, alias, duration days, or dev hub alias not specified"
 		local msg="Error: definition file, alias, duration days, and dev hub alias must be specified"
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
@@ -116,11 +150,16 @@ validate_args() {
 		fi
 		exit 1
 	fi
+	log_debug_stderr "All required arguments are present"
 }
 
 check_dependencies() {
 	local JSON_OUTPUT="$1"
+
+	log_debug_stderr "Checking script dependencies"
+
 	if ! command -v sf > /dev/null 2>&1; then
+		log_error_stderr "Missing dependency: Salesforce CLI (sf) is not installed"
 		local msg="Error: Salesforce CLI (sf) is not installed."
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
@@ -130,7 +169,10 @@ check_dependencies() {
 		fi
 		exit 1
 	fi
+	log_debug_stderr "Salesforce CLI dependency check passed"
+
 	if ! command -v jq > /dev/null 2>&1; then
+		log_error_stderr "Missing dependency: jq is not installed"
 		local msg="Error: jq is required but not installed."
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
@@ -140,6 +182,7 @@ check_dependencies() {
 		fi
 		exit 1
 	fi
+	log_debug_stderr "jq dependency check passed"
 }
 
 run_sf_create_scratch_command() {
@@ -166,10 +209,16 @@ start_scratch_org_creation() {
 	local SF_DEV_HUB_ALIAS="$4"
 	local NO_NAMESPACE="$5"
 	local JSON_OUTPUT="$6"
+
+	log_info_stderr "Starting scratch org creation with alias: '$SCRATCH_ALIAS'"
+	log_debug_stderr "Executing sf org create scratch command"
+
 	local CREATE_OUTPUT
 	CREATE_OUTPUT=$(run_sf_create_scratch_command "$DEFINITION_FILE" "$SCRATCH_ALIAS" "$DURATION_DAYS" "$SF_DEV_HUB_ALIAS" "$NO_NAMESPACE")
 	local status=$?
+
 	if [ $status -ne 0 ] || echo "$CREATE_OUTPUT" | jq -e '.status // empty' | grep -q 1; then
+		log_error_stderr "sf org create scratch command failed"
 		local msg="Error: Failed to start scratch org creation."
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
@@ -179,6 +228,8 @@ start_scratch_org_creation() {
 		fi
 		return 0
 	fi
+
+	log_debug_stderr "Scratch org creation command executed successfully"
 	echo "$CREATE_OUTPUT"
 }
 
@@ -192,7 +243,10 @@ check_job_id() {
 	local create_output="$2"
 	local json_output="$3"
 
+	log_debug_stderr "Validating extracted job ID: '$job_id'"
+
 	if [ -z "$job_id" ] || [ "$job_id" = "null" ]; then
+		log_error_stderr "Could not extract valid job ID from scratch org creation output"
 		local msg="Error: Could not extract job ID from scratch org creation output."
 		local func="${FUNCNAME[0]}"
 		if [ "$json_output" = true ]; then
@@ -202,6 +256,8 @@ check_job_id() {
 		fi
 		exit 1
 	fi
+
+	log_debug_stderr "Job ID validation passed"
 }
 
 show_progress() {
@@ -215,12 +271,18 @@ get_final_json_output() {
 	local JOB_ID="$1"
 	local CREATE_OUTPUT="$2"
 	local JSON_OUTPUT="$3"
+
+	log_debug_stderr "Retrieving final scratch org creation status"
+
 	local FINAL_JSON
 	if ! FINAL_JSON=$(sf org resume scratch --job-id "$JOB_ID" --json 2> /dev/null); then
+		log_warn "sf org resume scratch command failed, attempting to use CREATE_OUTPUT"
 		# If resume fails, try to use CREATE_OUTPUT if it's valid JSON
 		if echo "$CREATE_OUTPUT" | jq empty 2> /dev/null; then
 			FINAL_JSON="$CREATE_OUTPUT"
+			log_debug_stderr "Using CREATE_OUTPUT as fallback for final result"
 		else
+			log_error_stderr "Neither resume nor CREATE_OUTPUT returned valid JSON"
 			local msg="Neither resume nor CREATE_OUTPUT returned valid JSON."
 			local func="${FUNCNAME[0]}"
 			if [ "$JSON_OUTPUT" = true ]; then
@@ -230,18 +292,28 @@ get_final_json_output() {
 			fi
 			exit 1
 		fi
+	else
+		log_debug_stderr "Successfully retrieved final scratch org status"
 	fi
+
 	echo "$FINAL_JSON"
 }
 
 output_final_result() {
 	local FINAL_JSON="$1"
 	local JSON_OUTPUT="$2"
+
+	log_debug_stderr "Preparing final output in requested format"
+
 	if [ "$JSON_OUTPUT" = true ]; then
+		log_debug_stderr "Outputting structured JSON format"
 		print_standard_json "OK" "Scratch org created successfully." "$FINAL_JSON"
 	else
+		log_debug_stderr "Outputting human-readable format"
 		print_standard_block "OK" "Scratch org created successfully!" "$FINAL_JSON"
 	fi
+
+	log_debug_stderr "Output formatting completed"
 }
 
 run_scratch_org_creation() {
@@ -278,10 +350,28 @@ main() {
 
 	local parsed
 	parsed=$(parse_args "$@")
-	IFS='|' read -r DEFINITION_FILE SCRATCH_ALIAS DURATION_DAYS SF_DEV_HUB_ALIAS NO_NAMESPACE JSON_OUTPUT <<< "$parsed"
+	IFS='|' read -r DEFINITION_FILE SCRATCH_ALIAS DURATION_DAYS SF_DEV_HUB_ALIAS NO_NAMESPACE JSON_OUTPUT DEBUG_LEVEL <<< "$parsed"
+
+	# Initialize logging based on debug flag
+	if [ -n "$DEBUG_LEVEL" ]; then
+		init_logger --level "$DEBUG_LEVEL"
+		log_debug_stderr "Debug mode enabled with level: $DEBUG_LEVEL"
+	else
+		init_logger --level INFO
+	fi
+
+	log_debug_stderr "Starting scratch-org-create-scratch-from-definition-file.sh with arguments: $*"
+	log_info_stderr "Parsed arguments - Definition file: '$DEFINITION_FILE', Alias: '$SCRATCH_ALIAS', Duration: $DURATION_DAYS days, Dev Hub: '$SF_DEV_HUB_ALIAS', No namespace: $NO_NAMESPACE, JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}"
+
 	validate_args "$DEFINITION_FILE" "$SCRATCH_ALIAS" "$DURATION_DAYS" "$SF_DEV_HUB_ALIAS" "$JSON_OUTPUT"
+	log_debug_stderr "Argument validation completed successfully"
+
 	check_dependencies "$JSON_OUTPUT"
+	log_debug_stderr "Dependency checks completed successfully"
+
 	run_scratch_org_creation "$DEFINITION_FILE" "$SCRATCH_ALIAS" "$DURATION_DAYS" "$SF_DEV_HUB_ALIAS" "$NO_NAMESPACE" "$JSON_OUTPUT"
+	log_info_stderr "Scratch org creation process completed successfully"
+	log_debug_stderr "Script execution completed successfully"
 }
 
 main "$@"
