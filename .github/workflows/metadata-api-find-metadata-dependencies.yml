@@ -132,12 +132,12 @@ jobs:
             echo "❌ Unsupported search_field: $SEARCH_FIELD"
             exit 1
           fi
-          echo "$ACTIONS_RUNNER_DEBUG"
           ./scripts/find-metadata-dependencies/bash/find-metadata-dependencies.sh \
             -s "$COMPONENT_TYPE" \
             $FLAG "$COMPONENT_NAME" \
             --json \
             --log "./find-metadata-dependencies.log" > dependencies-report.json
+          cat dependencies-report.json
 
       - name: Check for Script Errors and Fail if Present
         id: check-errors
