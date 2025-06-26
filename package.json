@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "description": "Repository to store GitHub actions and automation scripts to work with salesforce instances.",
+  "type": "module",
   "scripts": {
     "lint": "eslint **/{aura,lwc}/**/*.js",
     "test": "npm run test:unit",
