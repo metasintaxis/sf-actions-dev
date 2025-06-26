@@ -53,28 +53,15 @@ jobs:
     outputs:
       target_env: ${{ steps.set_env.outputs.env }}
     steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
       - name: Set environment
         id: set_env
         run: |
-          if [ '${{ github.ref }}' = 'refs/heads/dev' ]; then
-            echo 'env=DEV' >> $GITHUB_OUTPUT
-          elif [ '${{ github.ref }}' = 'refs/heads/devops/actions' ]; then
-            echo 'env=DEV' >> $GITHUB_OUTPUT
-          elif [ '${{ github.ref }}' = 'refs/heads/devops/actions-test' ]; then
-            echo 'env=DEV' >> $GITHUB_OUTPUT
-          elif [ '${{ github.ref }}' = 'refs/heads/qa' ]; then
-            echo 'env=QA' >> $GITHUB_OUTPUT
-          elif [ '${{ github.ref }}' = 'refs/heads/uat' ]; then
-            echo 'env=UAT' >> $GITHUB_OUTPUT
-          elif [ '${{ github.ref }}' = 'refs/heads/preprod' ]; then
-            echo 'env=PREPROD' >> $GITHUB_OUTPUT
-          elif [ '${{ github.ref }}' = 'refs/heads/prod' ]; then
-            echo 'env=PROD' >> $GITHUB_OUTPUT
-          elif [ '${{ github.ref }}' = 'refs/heads/main' ]; then
-            echo 'env=PROD' >> $GITHUB_OUTPUT
-          else 
-            echo 'env=DEV' >> $GITHUB_OUTPUT
-          fi
+          chmod +x ./scripts/bash/lib/determine-target-environment.sh
+          TARGET_ENV=$(./scripts/bash/lib/determine-target-environment.sh '${{ github.ref }}')
+          echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
 
   find-dependencies:
     needs: set-target-env
