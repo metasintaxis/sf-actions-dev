@@ -59,9 +59,9 @@ export const buildSourceComponentTable = (record) => {
 			{ data: 'Name', header: true }
 		],
 		[
-			{ data: record.RefMetadataComponentId || 'Unknown' },
-			{ data: record.RefMetadataComponentType || 'Unknown' },
-			{ data: record.RefMetadataComponentName || 'Unknown' }
+			{ data: record.RefMetadataComponentId || '-' },
+			{ data: record.RefMetadataComponentType || '-' },
+			{ data: record.RefMetadataComponentName || '-' }
 		]
 	];
 };
