@@ -1,7 +1,7 @@
 ---
-name: Feature 
+name: Feature
 about: New feature issue template.
-title: "[FEATURE TITLE]"
+title: '[FEATURE TITLE]'
 labels: enhancement
 type: Feature
 assignees: AlbertoMata
@@ -13,7 +13,7 @@ assignees: AlbertoMata
 
 ## Acceptance Criteria
 
-[//]: # (Specify the item details for the requirement)
+[//]: # 'Specify the item details for the requirement'
 
 - [First criteria]
 - [Second criteria]

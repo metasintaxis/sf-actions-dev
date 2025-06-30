@@ -1,16 +1,16 @@
 {
-  "orgName": "dev",
-  "edition": "Developer",
-  "username": "alberto.mata@metasintaxis-scratch-01.dev",
-  "adminEmail": "alberto.mata@metasintaxis.com",
-  "description": "Scratch org for development purposes",
-  "features": ["EnableSetPasswordInApi"],
-  "settings": {
-    "lightningExperienceSettings": {
-      "enableS1DesktopEnabled": true
-    },
-    "mobileSettings": {
-      "enableS1EncryptedStoragePref2": false
-    }
-  }
+	"orgName": "dev",
+	"edition": "Developer",
+	"username": "alberto.mata@metasintaxis-scratch-01.dev",
+	"adminEmail": "alberto.mata@metasintaxis.com",
+	"description": "Scratch org for development purposes",
+	"features": ["EnableSetPasswordInApi"],
+	"settings": {
+		"lightningExperienceSettings": {
+			"enableS1DesktopEnabled": true
+		},
+		"mobileSettings": {
+			"enableS1EncryptedStoragePref2": false
+		}
+	}
 }
