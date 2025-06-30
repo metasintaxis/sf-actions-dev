@@ -1,7 +1,7 @@
 ---
-name: Bug 
+name: Bug
 about: Bug issue template.
-title: "[BUG TITLE]"
+title: '[BUG TITLE]'
 labels: bug
 type: Bug
 assignees: AlbertoMata
