@@ -38,18 +38,18 @@ log_fatal "This is a fatal error message"
 
 The `init_logger` function accepts the following options:
 
-| Option | Description |
-|--------|-------------|
-| `-l, --log, --logfile, --log-file, --file FILE` | Specify a log file to write logs to |
-| `-q, --quiet` | Disable console output |
-| `-v, --verbose, --debug` | Set log level to DEBUG (most verbose) |
-| `-d, --level LEVEL` | Set log level (DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY or 0-7) |
-| `-f, --format FORMAT` | Set custom log format |
-| `-u, --utc` | Use UTC time instead of local time |
-| `-j, --journal` | Enable logging to systemd journal |
-| `-t, --tag TAG` | Set custom tag for journal logs (default: script name) |
-| `--color --colour` | Explicitly enable color output (default: auto-detect) |
-| `--no-color --no-colour` | Disable color output | 
+| Option                                          | Description                                                                         |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `-l, --log, --logfile, --log-file, --file FILE` | Specify a log file to write logs to                                                 |
+| `-q, --quiet`                                   | Disable console output                                                              |
+| `-v, --verbose, --debug`                        | Set log level to DEBUG (most verbose)                                               |
+| `-d, --level LEVEL`                             | Set log level (DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY or 0-7) |
+| `-f, --format FORMAT`                           | Set custom log format                                                               |
+| `-u, --utc`                                     | Use UTC time instead of local time                                                  |
+| `-j, --journal`                                 | Enable logging to systemd journal                                                   |
+| `-t, --tag TAG`                                 | Set custom tag for journal logs (default: script name)                              |
+| `--color --colour`                              | Explicitly enable color output (default: auto-detect)                               |
+| `--no-color --no-colour`                        | Disable color output                                                                |
 
 Example:
 
@@ -62,17 +62,17 @@ init_logger --log "/var/log/myscript.log" --level DEBUG --journal --tag "myapp"
 
 The module supports standard syslog levels, from most to least severe:
 
-| Level | Numeric Value | Function | Syslog Priority |
-|-------|---------------|----------|----------------|
-| EMERGENCY | 0 | `log_emergency` | emerg |
-| ALERT | 1 | `log_alert` | alert |
-| CRITICAL | 2 | `log_critical` | crit |
-| ERROR | 3 | `log_error` | err |
-| WARN | 4 | `log_warn` | warning |
-| NOTICE | 5 | `log_notice` | notice |
-| INFO | 6 | `log_info` | info |
-| DEBUG | 7 | `log_debug` | debug |
-| SENSITIVE | - | `log_sensitive` | (not sent to syslog) |
+| Level     | Numeric Value | Function        | Syslog Priority      |
+| --------- | ------------- | --------------- | -------------------- |
+| EMERGENCY | 0             | `log_emergency` | emerg                |
+| ALERT     | 1             | `log_alert`     | alert                |
+| CRITICAL  | 2             | `log_critical`  | crit                 |
+| ERROR     | 3             | `log_error`     | err                  |
+| WARN      | 4             | `log_warn`      | warning              |
+| NOTICE    | 5             | `log_notice`    | notice               |
+| INFO      | 6             | `log_info`      | info                 |
+| DEBUG     | 7             | `log_debug`     | debug                |
+| SENSITIVE | -             | `log_sensitive` | (not sent to syslog) |
 
 Messages with a level lower than the current log level are suppressed.
 
@@ -82,13 +82,13 @@ Sensitive messages are logged at the INFO level but are not written to log files
 
 You can customize the log format using special placeholders:
 
-| Placeholder | Description | Example |
-|-------------|-------------|---------|
-| `%d` | Date and time | `2025-03-03 12:34:56` |
-| `%l` | Log level | `INFO` |
-| `%s` | Script name | `myscript.sh` |
-| `%m` | Log message | `Operation completed successfully` |
-| `%z` | Timezone | `UTC` or `LOCAL` |
+| Placeholder | Description   | Example                            |
+| ----------- | ------------- | ---------------------------------- |
+| `%d`        | Date and time | `2025-03-03 12:34:56`              |
+| `%l`        | Log level     | `INFO`                             |
+| `%s`        | Script name   | `myscript.sh`                      |
+| `%m`        | Log message   | `Operation completed successfully` |
+| `%z`        | Timezone      | `UTC` or `LOCAL`                   |
 
 The default format is: `%d [%l] [%s] %m`
 
@@ -104,24 +104,24 @@ You can change configuration at runtime using these functions:
 
 ```bash
 # Change log level
-set_log_level DEBUG      # Set to DEBUG level
-set_log_level NOTICE     # Set to NOTICE level
-set_log_level WARN       # Set to WARN level
-set_log_level CRITICAL   # Set to CRITICAL level
+set_log_level DEBUG    # Set to DEBUG level
+set_log_level NOTICE   # Set to NOTICE level
+set_log_level WARN     # Set to WARN level
+set_log_level CRITICAL # Set to CRITICAL level
 
 # Change timezone setting
-set_timezone_utc true   # Use UTC time
-set_timezone_utc false  # Use local time
+set_timezone_utc true  # Use UTC time
+set_timezone_utc false # Use local time
 
 # Change log format
 set_log_format "[%l] %d [%s] - %m"
 
 # Enable/disable journal logging
-set_journal_logging true   # Enable journal logging
-set_journal_logging false  # Disable journal logging
+set_journal_logging true  # Enable journal logging
+set_journal_logging false # Disable journal logging
 
 # Change journal tag
-set_journal_tag "new-tag"  # Set new tag for journal logs
+set_journal_tag "new-tag" # Set new tag for journal logs
 ```
 
 ## Journal Logging
@@ -169,15 +169,15 @@ journalctl -b -t myapp
 Log levels are mapped to syslog priorities as follows:
 
 | Log Level | Syslog Priority |
-|-----------|----------------|
-| DEBUG | debug |
-| INFO | info |
-| NOTICE | notice |
-| WARN | warning |
-| ERROR | err |
-| CRITICAL | crit |
-| ALERT | alert |
-| EMERGENCY | emerg |
+| --------- | --------------- |
+| DEBUG     | debug           |
+| INFO      | info            |
+| NOTICE    | notice          |
+| WARN      | warning         |
+| ERROR     | err             |
+| CRITICAL  | crit            |
+| ALERT     | alert           |
+| EMERGENCY | emerg           |
 
 ## Example Use Cases
 
@@ -193,7 +193,7 @@ source /path/to/logging.sh
 init_logger
 
 log_info "Script starting"
-log_debug "Debug information" 
+log_debug "Debug information"
 # ... script operations ...
 log_warn "Warning: resource usage high"
 log_info "Script completed"
@@ -243,12 +243,12 @@ source /path/to/logging.sh
 
 # Initialize with multiple outputs and custom format
 init_logger \
-  --log "/var/log/myapp.log" \
-  --journal \
-  --tag "myapp" \
-  --format "%d %z [%l] [%s] %m" \
-  --utc \
-  --level INFO
+	--log "/var/log/myapp.log" \
+	--journal \
+	--tag "myapp" \
+	--format "%d %z [%l] [%s] %m" \
+	--utc \
+	--level INFO
 
 log_info "Application initialized with comprehensive logging"
 ```
@@ -266,16 +266,16 @@ init_logger
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
-  case $1 in
-    --debug)
-      set_log_level DEBUG
-      shift
-      ;;
-    # Other arguments...
-  esac
+	case $1 in
+		--debug)
+			set_log_level DEBUG
+			shift
+			;;
+			# Other arguments...
+	esac
 done
 
-log_debug "Debug mode enabled"  # Only shows if --debug was passed
+log_debug "Debug mode enabled" # Only shows if --debug was passed
 log_info "Normal operation"
 ```
 
@@ -312,22 +312,22 @@ source /path/to/logging.sh
 init_logger --log "/var/log/myapp.log"
 
 function process_item() {
-  local item=$1
-  log_debug "Processing item: $item"
-  
-  # Processing logic...
-  if [[ "$item" == "important" ]]; then
-    log_info "Found important item"
-  fi
-  
-  # Error handling
-  if [[ "$?" -ne 0 ]]; then
-    log_error "Failed to process item: $item"
-    return 1
-  fi
-  
-  log_debug "Completed processing item: $item"
-  return 0
+	local item=$1
+	log_debug "Processing item: $item"
+
+	# Processing logic...
+	if [[ "$item" == "important" ]]; then
+		log_info "Found important item"
+	fi
+
+	# Error handling
+	if [[ "$?" -ne 0 ]]; then
+		log_error "Failed to process item: $item"
+		return 1
+	fi
+
+	log_debug "Completed processing item: $item"
+	return 0
 }
 
 log_info "Starting batch processing"
