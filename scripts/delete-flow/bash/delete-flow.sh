@@ -377,7 +377,7 @@ delete_flow_versions() {
 	fi
 }
 
-delete-flow() {
+delete_flow() {
 	log_info_stderr "Executing flow deletion logic"
 	log_debug_stderr "Processing flow: '$DEVELOPER_NAME', status: '$FLOW_STATUS'"
 
@@ -410,7 +410,7 @@ main() {
 	check_dependencies
 	log_debug_stderr "Dependency checks completed successfully"
 
-	delete-flow
+	delete_flow
 	log_debug_stderr "Script execution completed successfully"
 }
 
