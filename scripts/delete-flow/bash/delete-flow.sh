@@ -334,10 +334,16 @@ delete_flow_versions() {
 
 			log_debug_stderr "Executing: $DELETE_COMMAND"
 
-			if eval "$DELETE_COMMAND" >/dev/null 2>&1; then
+			# Temporarily disable exit on error for the delete command
+			set +e
+			eval "$DELETE_COMMAND" >/dev/null 2>&1
+			local delete_exit_code=$?
+			set -e
+
+			if [ $delete_exit_code -eq 0 ]; then
 				log_info_stderr "Successfully deleted flow version $version_number"
 				DELETED_RECORDS+=("{\"id\": \"$flow_id\", \"versionNumber\": $version_number}")
-				((DELETE_COUNT++))
+				DELETE_COUNT=$((DELETE_COUNT + 1))
 			else
 				log_error_stderr "Failed to delete flow version $version_number (ID: $flow_id)"
 				local msg="Failed to delete flow version $version_number"
