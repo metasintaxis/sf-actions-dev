@@ -140,8 +140,8 @@ export const writeDeletionSummary = async (
 			.addHeading('✅ Deleted Flow Versions', 3)
 			.addTable(deletionTableData)
 			.addBreak()
-			.addRaw('### 🎉 Success!')
-			.addRaw(`Successfully deleted **${deletedCount}** flow version(s).`);
+			.addHeading('🎉 Success!', 3)
+			.addRaw(`Successfully deleted <b>${deletedCount}</b> flow version(s).`);
 	} else {
 		await core.summary
 			.addHeading('ℹ️ No Versions Found', 3)
@@ -170,17 +170,6 @@ const main = async () => {
 	}
 	if (!fs.existsSync(filePath)) {
 		core.setFailed(`File not found: ${filePath}`);
-		process.exit(1);
-	}
-	
-	// Debug: Show raw file contents
-	try {
-		const rawContent = fs.readFileSync(filePath, 'utf8');
-		console.log('Raw file contents:');
-		console.log(rawContent);
-		console.log('--- End raw contents ---');
-	} catch (error) {
-		core.setFailed(`Failed to read file: ${error.message}`);
 		process.exit(1);
 	}
 	

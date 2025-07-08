@@ -129,10 +129,6 @@ jobs:
         id: check-errors
         shell: bash
         run: |
-          echo "=== Debug: Contents of delete-flow-report.json ==="
-          cat delete-flow-report.json
-          echo "=== End Debug ==="
-          
           if jq -e '.status == "ERROR"' delete-flow-report.json > /dev/null; then
             echo "error=true" >> $GITHUB_OUTPUT
           else
