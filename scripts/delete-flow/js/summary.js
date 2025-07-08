@@ -19,7 +19,40 @@ import * as core from '@actions/core';
  * @returns {object}
  */
 export const readDeletionReport = (filePath) => {
-	return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+	try {
+		const content = fs.readFileSync(filePath, 'utf8').trim();
+		
+		// Handle case where there might be multiple JSON objects
+		const lines = content.split('\n').filter(line => line.trim());
+		
+		if (lines.length === 0) {
+			throw new Error('File is empty');
+		}
+		
+		if (lines.length === 1) {
+			// Single JSON object
+			return JSON.parse(lines[0]);
+		}
+		
+		// Multiple lines - try to find the last valid JSON object
+		// (assuming the final result is what we want)
+		for (let i = lines.length - 1; i >= 0; i--) {
+			try {
+				const parsed = JSON.parse(lines[i]);
+				if (parsed.status && parsed.message) {
+					return parsed;
+				}
+			} catch (e) {
+				// Skip invalid JSON lines
+				continue;
+			}
+		}
+		
+		// If no valid JSON found, try parsing the entire content
+		return JSON.parse(content);
+	} catch (error) {
+		throw new Error(`Failed to parse JSON from ${filePath}: ${error.message}`);
+	}
 };
 
 /**
@@ -28,7 +61,17 @@ export const readDeletionReport = (filePath) => {
  * @returns {Array<Array<{data: string, header?: boolean}>>}
  */
 export const buildDeletionTableData = (deletionReport) => {
-	const detail = JSON.parse(deletionReport?.detail || '{}');
+	let detail;
+	try {
+		// If detail is already an object, use it; if it's a string, parse it
+		detail = typeof deletionReport?.detail === 'string' 
+			? JSON.parse(deletionReport.detail) 
+			: deletionReport?.detail || {};
+	} catch (error) {
+		console.warn('Failed to parse detail field:', error.message);
+		detail = {};
+	}
+	
 	const records = detail?.records || [];
 	const tableHeader = [
 		{ data: 'Flow ID', header: true },
@@ -51,7 +94,17 @@ export const buildDeletionTableData = (deletionReport) => {
  * @returns {object}
  */
 export const extractSummaryInfo = (deletionReport) => {
-	const detail = JSON.parse(deletionReport?.detail || '{}');
+	let detail;
+	try {
+		// If detail is already an object, use it; if it's a string, parse it
+		detail = typeof deletionReport?.detail === 'string' 
+			? JSON.parse(deletionReport.detail) 
+			: deletionReport?.detail || {};
+	} catch (error) {
+		console.warn('Failed to parse detail field:', error.message);
+		detail = {};
+	}
+	
 	return {
 		deletedCount: detail?.deletedRecords || 0,
 		records: detail?.records || [],
@@ -117,6 +170,17 @@ const main = async () => {
 	}
 	if (!fs.existsSync(filePath)) {
 		core.setFailed(`File not found: ${filePath}`);
+		process.exit(1);
+	}
+	
+	// Debug: Show raw file contents
+	try {
+		const rawContent = fs.readFileSync(filePath, 'utf8');
+		console.log('Raw file contents:');
+		console.log(rawContent);
+		console.log('--- End raw contents ---');
+	} catch (error) {
+		core.setFailed(`Failed to read file: ${error.message}`);
 		process.exit(1);
 	}
 	

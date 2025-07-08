@@ -19,27 +19,74 @@ import * as core from '@actions/core';
  * @returns {object} error object
  */
 export function readError(filePath) {
-	const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-	const detail = data.detail || {};
-	return {
-		status: data.status,
-		message: data.message,
-		errorCode: data.errorCode,
-		line: data.line,
-		script: data.script,
-		function: data.function,
-		timestamp: data.timestamp,
-		// Flatten some detail fields if present
-		detailName: detail.name,
-		detailMessage: detail.message,
-		detailErrorCode: detail.errorCode,
-		detailContext: detail.context,
-		detailStack: detail.stack,
-		detailWarnings: detail.warnings,
-		detailStatus: detail.status,
-		detailCommandName: detail.commandName,
-		detailExitCode: detail.exitCode
-	};
+	try {
+		const content = fs.readFileSync(filePath, 'utf8').trim();
+		
+		// Handle case where there might be multiple JSON objects
+		const lines = content.split('\n').filter(line => line.trim());
+		
+		if (lines.length === 0) {
+			throw new Error('File is empty');
+		}
+		
+		let data;
+		if (lines.length === 1) {
+			// Single JSON object
+			data = JSON.parse(lines[0]);
+		} else {
+			// Multiple lines - try to find the last valid JSON object
+			// (assuming the final result is what we want)
+			for (let i = lines.length - 1; i >= 0; i--) {
+				try {
+					const parsed = JSON.parse(lines[i]);
+					if (parsed.status && parsed.message) {
+						data = parsed;
+						break;
+					}
+				} catch (e) {
+					// Skip invalid JSON lines
+					continue;
+				}
+			}
+			if (!data) {
+				// If no valid JSON found, try parsing the entire content
+				data = JSON.parse(content);
+			}
+		}
+		
+		let detail;
+		try {
+			// If detail is already an object, use it; if it's a string, parse it
+			detail = typeof data?.detail === 'string' 
+				? JSON.parse(data.detail) 
+				: data?.detail || {};
+		} catch (error) {
+			console.warn('Failed to parse detail field:', error.message);
+			detail = {};
+		}
+		
+		return {
+			status: data.status,
+			message: data.message,
+			errorCode: data.errorCode,
+			line: data.line,
+			script: data.script,
+			function: data.function,
+			timestamp: data.timestamp,
+			// Flatten some detail fields if present
+			detailName: detail.name,
+			detailMessage: detail.message,
+			detailErrorCode: detail.errorCode,
+			detailContext: detail.context,
+			detailStack: detail.stack,
+			detailWarnings: detail.warnings,
+			detailStatus: detail.status,
+			detailCommandName: detail.commandName,
+			detailExitCode: detail.exitCode
+		};
+	} catch (error) {
+		throw new Error(`Failed to parse JSON from ${filePath}: ${error.message}`);
+	}
 }
 
 /**

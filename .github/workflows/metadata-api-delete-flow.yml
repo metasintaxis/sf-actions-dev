@@ -123,12 +123,16 @@ jobs:
             --status "${{ github.event.inputs.flow_status }}" \
             --json \
             --log "./delete-flow.log" > delete-flow-report.json
-          cat delete-flow-report.json
+          echo "Script execution completed with exit code: $?"
 
       - name: Check for Script Errors and Fail if Present
         id: check-errors
         shell: bash
         run: |
+          echo "=== Debug: Contents of delete-flow-report.json ==="
+          cat delete-flow-report.json
+          echo "=== End Debug ==="
+          
           if jq -e '.status == "ERROR"' delete-flow-report.json > /dev/null; then
             echo "error=true" >> $GITHUB_OUTPUT
           else
