@@ -14,7 +14,8 @@
 		"prettier": "prettier --write \"**/*.{cls,cmp,component,css,html,js,json,md,page,trigger,xml,yaml,yml}\"",
 		"prettier:verify": "prettier --check \"**/*.{cls,cmp,component,css,html,js,json,md,page,trigger,xml,yaml,yml}\"",
 		"postinstall": "husky init",
-		"precommit": "lint-staged"
+		"precommit": "lint-staged",
+		"prepare": "husky"
 	},
 	"devDependencies": {
 		"@lwc/engine-dom": "^8.18.0",
