@@ -5,7 +5,7 @@
 # @brief Create Git branches from open GitHub issues
 #
 # @description
-#   This script fetches open issues from a GitHub repository and creates corresponding 
+#   This script fetches open issues from a GitHub repository and creates corresponding
 #   Git branches from a base branch (default: dev). Issues with specified exclude labels
 #   can be filtered out. Each branch follows the naming convention:
 #   GH-[ISSUE_NUMBER]-Issue-Title. The script uses the fetch-issues.sh script as a dependency.
@@ -324,25 +324,30 @@ init_script_logging() {
 # Function to sanitize issue title for branch name
 sanitize_branch_name() {
 	local title="$1"
-	# Convert to lowercase, replace spaces and special chars with hyphens, remove multiple hyphens
-	echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g'
+	# Convert to lowercase, remove problematic characters, replace spaces with hyphens, clean up multiple hyphens
+	echo "$title" \
+		| tr '[:upper:]' '[:lower:]' \
+		| sed 's/[^a-z0-9 ]//g' \
+		| tr ' ' '-' \
+		| sed 's/-\+/-/g' \
+		| sed 's/^-\|-$//g'
 }
 
 # Function to build jq filter for excluding labels
 build_exclude_filter() {
 	local exclude_labels="$1"
-	
+
 	# If no exclude labels, return a filter that includes all issues
 	if [ -z "$exclude_labels" ]; then
 		echo "."
 		return 0
 	fi
-	
+
 	# Parse comma-separated labels and build jq conditions
 	local conditions=()
 	local IFS=','
 	read -ra labels_array <<< "$exclude_labels"
-	
+
 	for label in "${labels_array[@]}"; do
 		# Trim whitespace
 		label=$(echo "$label" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -350,16 +355,19 @@ build_exclude_filter() {
 			conditions+=("\"$label\"")
 		fi
 	done
-	
+
 	# If no valid labels after parsing, return filter that includes all
 	if [ ${#conditions[@]} -eq 0 ]; then
 		echo "."
 		return 0
 	fi
-	
+
 	# Build the jq filter: select issues that don't have any of the exclude labels
 	local condition_string
-	condition_string=$(IFS=' or . == '; echo "${conditions[*]}")
+	condition_string=$(
+		IFS=' or . == '
+		echo "${conditions[*]}"
+	)
 	echo "[.[] | select((.labels | map(.name) | any(. == $condition_string)) | not)]"
 }
 
@@ -491,7 +499,7 @@ create-branches() {
 	local issues_json
 	local filter_expression
 	filter_expression=$(build_exclude_filter "$EXCLUDE_LABELS")
-	
+
 	if ! issues_json=$(echo "$all_issues_json" | jq "$filter_expression" 2> /dev/null); then
 		log_error_stderr "Failed to filter issues"
 		local msg="Error: Failed to filter issues by labels"
