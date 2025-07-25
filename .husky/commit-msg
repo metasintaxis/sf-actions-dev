@@ -1,2 +1,2 @@
 #!/bin/bash
-./scripts/bash/lib/validate-commit-message.sh "$1"
+./scripts/bash/hooks/validate-commit-message.sh "$1"
