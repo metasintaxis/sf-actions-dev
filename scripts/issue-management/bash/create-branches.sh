@@ -9,15 +9,19 @@
 #   Git branches from a base branch (default: dev). Issues with specified exclude labels
 #   can be filtered out. Each branch follows the naming convention:
 #   GH-[ISSUE_NUMBER]-Issue-Title. The script uses the fetch-issues.sh script as a dependency.
+#   You can either process all open issues or create a branch for a specific issue number.
 #
 # @usage
 #   ./create-branches.sh -r <repo> [--base-branch <branch>] [--exclude-labels <labels>] [--dry-run] [--json] [--log FILE] [--debug [LEVEL]]
+#   ./create-branches.sh -r <repo> --issue <number> [--base-branch <branch>] [--dry-run] [--json] [--log FILE] [--debug [LEVEL]]
 #   ./create-branches.sh -r owner/repo-name [--exclude-labels "help wanted,wontfix"] [--json] [--log FILE] [--debug [LEVEL]]
 #
 # @options
 #   -r, --repo REPO       GitHub repository in format owner/repo-name (required).
+#   -i, --issue NUMBER    Create branch for specific issue number only.
 #   --base-branch BRANCH  Base branch to create new branches from (default: dev).
 #   --exclude-labels LABELS  Comma-separated list of labels to exclude (default: "help wanted,wontfix").
+#                         Ignored when --issue is specified.
 #   --dry-run             Show what branches would be created without actually creating them.
 #   --json                Output result and errors in JSON format.
 #   --log FILE            Write debug and operational logs to specified file
@@ -40,6 +44,7 @@ source "${SCRIPT_DIR}/../../bash/lib/logging/watts/logging.sh"
 
 # Default values for arguments
 REPO=""
+ISSUE_NUMBER=""
 BASE_BRANCH="dev"
 EXCLUDE_LABELS="help wanted,wontfix"
 DRY_RUN=false
@@ -53,11 +58,14 @@ FETCH_ISSUES_SCRIPT="${SCRIPT_DIR}/fetch-issues.sh"
 show_usage() {
 	echo "Usage:"
 	echo "  $0 -r <repo> [--base-branch <branch>] [--exclude-labels <labels>] [--dry-run] [--json] [--log FILE] [--debug [LEVEL]]"
+	echo "  $0 -r <repo> --issue <number> [--base-branch <branch>] [--dry-run] [--json] [--log FILE] [--debug [LEVEL]]"
 	echo
 	echo "Options:"
 	echo "  -r, --repo REPO         GitHub repository in format owner/repo-name (required)."
+	echo "  -i, --issue NUMBER      Create branch for specific issue number only."
 	echo "  --base-branch BRANCH    Base branch to create new branches from (default: dev)."
 	echo "  --exclude-labels LABELS Comma-separated list of labels to exclude (default: \"help wanted,wontfix\")."
+	echo "                          Ignored when --issue is specified."
 	echo "  --dry-run               Show what branches would be created without actually creating them."
 	echo "  --json                  Output result and errors in JSON format."
 	echo "  --log FILE              Write debug and operational logs to specified file"
@@ -68,18 +76,23 @@ show_usage() {
 	echo
 	echo "Description:"
 	echo "  This script fetches open issues from the specified GitHub repository"
-	echo "  (excluding those with specified exclude labels) and creates"
-	echo "  corresponding Git branches with the format:"
+	echo "  and creates corresponding Git branches with the format:"
 	echo "  GH-[ISSUE_NUMBER]-Issue-Title"
+	echo
+	echo "  When --issue is specified, only that specific issue will be processed,"
+	echo "  regardless of its labels. When not specified, all open issues are"
+	echo "  processed (excluding those with specified exclude labels)."
 	echo
 	echo "Examples:"
 	echo "  $0 -r metasintaxis/sf-actions-dev"
 	echo "  $0 -r owner/repo --base-branch main --exclude-labels \"wontfix,duplicate\" --dry-run"
+	echo "  $0 -r owner/repo --issue 42 --base-branch main --dry-run"
 	echo "  $0 -r owner/repo --exclude-labels \"\" --json --debug INFO  # No exclusions"
 }
 
 parse_args() {
 	REPO=""
+	ISSUE_NUMBER=""
 	BASE_BRANCH="dev"
 	EXCLUDE_LABELS="help wanted,wontfix"
 	DRY_RUN=false
@@ -91,6 +104,10 @@ parse_args() {
 		case "$1" in
 			-r | --repo)
 				REPO="$2"
+				shift 2
+				;;
+			-i | --issue)
+				ISSUE_NUMBER="$2"
 				shift 2
 				;;
 			--base-branch)
@@ -239,6 +256,22 @@ validate_args() {
 			print_error_block "$msg" "$detail" "INVALID_FORMAT" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
+	fi
+
+	# Validate issue number if provided
+	if [ -n "$ISSUE_NUMBER" ]; then
+		if [[ ! "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+			log_error_stderr "Invalid issue number: $ISSUE_NUMBER"
+			local msg="Error: issue number must be a positive integer"
+			local detail="Issue number provided: '$ISSUE_NUMBER'"
+			local func="${FUNCNAME[0]}"
+			if [ "$JSON_OUTPUT" = true ]; then
+				print_error_json "$msg" "$detail" "INVALID_ISSUE_NUMBER" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			else
+				print_error_block "$msg" "$detail" "INVALID_ISSUE_NUMBER" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			fi
+			exit 1
+		fi
 	fi
 
 	# Validate base branch name (basic validation)
@@ -430,9 +463,51 @@ create_branch_for_issue() {
 	fi
 }
 
+# Function to fetch a specific issue
+fetch_specific_issue() {
+	local issue_number="$1"
+	log_debug_stderr "Fetching specific issue #$issue_number from $REPO"
+
+	local fetch_args=(
+		"-r" "$REPO"
+		"--issue" "$issue_number"
+		"--json"
+	)
+
+	# Add debug flag if present
+	if [ -n "$DEBUG_LEVEL" ]; then
+		fetch_args+=("--debug" "$DEBUG_LEVEL")
+	fi
+
+	# Add log file if present
+	if [ -n "$LOG_FILE" ]; then
+		fetch_args+=("--log" "$LOG_FILE")
+	fi
+
+	local issue_response
+	if ! issue_response=$("$FETCH_ISSUES_SCRIPT" "${fetch_args[@]}"); then
+		log_error_stderr "Failed to fetch issue #$issue_number"
+		return 1
+	fi
+
+	# Extract the issue data from the response
+	local issue_json
+	if ! issue_json=$(echo "$issue_response" | jq -r '.detail' 2> /dev/null); then
+		log_error_stderr "Failed to parse issue response"
+		return 1
+	fi
+
+	echo "$issue_json"
+}
+
 create-branches() {
-	log_info_stderr "Creating branches from open issues"
-	log_debug_stderr "Repository: $REPO, Base branch: $BASE_BRANCH, Exclude labels: '$EXCLUDE_LABELS', Dry run: $DRY_RUN"
+	if [ -n "$ISSUE_NUMBER" ]; then
+		log_info_stderr "Creating branch for specific issue #$ISSUE_NUMBER"
+		log_debug_stderr "Repository: $REPO, Issue: $ISSUE_NUMBER, Base branch: $BASE_BRANCH, Dry run: $DRY_RUN"
+	else
+		log_info_stderr "Creating branches from open issues"
+		log_debug_stderr "Repository: $REPO, Base branch: $BASE_BRANCH, Exclude labels: '$EXCLUDE_LABELS', Dry run: $DRY_RUN"
+	fi
 
 	# Check if base branch exists
 	if ! check_base_branch; then
@@ -447,96 +522,117 @@ create-branches() {
 		exit 1
 	fi
 
-	# Fetch open issues using the fetch-issues script
-	log_debug_stderr "Fetching open issues from $REPO"
-	local fetch_args=(
-		"-r" "$REPO"
-		"--state" "open"
-		"--json"
-	)
-
-	# Add debug flag if present
-	if [ -n "$DEBUG_LEVEL" ]; then
-		fetch_args+=("--debug" "$DEBUG_LEVEL")
-	fi
-
-	# Add log file if present
-	if [ -n "$LOG_FILE" ]; then
-		fetch_args+=("--log" "$LOG_FILE")
-	fi
-
-	local issues_response
-	if ! issues_response=$("$FETCH_ISSUES_SCRIPT" "${fetch_args[@]}"); then
-		log_error_stderr "Failed to fetch issues"
-		local msg="Error: Failed to fetch open issues"
-		local detail="The fetch-issues script failed to retrieve issues from $REPO"
-		local func="${FUNCNAME[0]}"
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "$detail" "FETCH_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
-		else
-			print_error_block "$msg" "$detail" "FETCH_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
-		fi
-		exit 1
-	fi
-
-	# Extract the issues array from the response
-	local all_issues_json
-	if ! all_issues_json=$(echo "$issues_response" | jq -r '.detail' 2> /dev/null); then
-		log_error_stderr "Failed to parse issues response"
-		local msg="Error: Invalid response format from fetch-issues script"
-		local detail="Could not extract issues data from the response"
-		local func="${FUNCNAME[0]}"
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "$detail" "PARSE_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
-		else
-			print_error_block "$msg" "$detail" "PARSE_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
-		fi
-		exit 1
-	fi
-
-	# Filter out issues with excluded labels
-	log_debug_stderr "Filtering out issues with excluded labels: '$EXCLUDE_LABELS'"
 	local issues_json
-	local filter_expression
-	filter_expression=$(build_exclude_filter "$EXCLUDE_LABELS")
-
-	if ! issues_json=$(echo "$all_issues_json" | jq "$filter_expression" 2> /dev/null); then
-		log_error_stderr "Failed to filter issues"
-		local msg="Error: Failed to filter issues by labels"
-		local detail="Could not filter out issues with excluded labels: '$EXCLUDE_LABELS'"
-		local func="${FUNCNAME[0]}"
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "$detail" "FILTER_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
-		else
-			print_error_block "$msg" "$detail" "FILTER_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
-		fi
-		exit 1
-	fi
-
-	# Count total issues after filtering
 	local total_all_issues
 	local total_issues
-	if ! total_all_issues=$(echo "$all_issues_json" | jq length 2> /dev/null) || ! total_issues=$(echo "$issues_json" | jq length 2> /dev/null); then
-		log_error_stderr "Failed to count issues"
-		local msg="Error: Could not count issues"
-		local detail="Issues data is not in expected array format"
-		local func="${FUNCNAME[0]}"
-		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "$detail" "COUNT_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
-		else
-			print_error_block "$msg" "$detail" "COUNT_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
-		fi
-		exit 1
-	fi
 
-	local filtered_count=$((total_all_issues - total_issues))
-	log_info_stderr "Found $total_all_issues open issues, filtered out $filtered_count with excluded labels"
-	log_info_stderr "Processing $total_issues eligible issues"
+	if [ -n "$ISSUE_NUMBER" ]; then
+		# Fetch specific issue
+		if ! issues_json=$(fetch_specific_issue "$ISSUE_NUMBER"); then
+			local msg="Error: Failed to fetch issue #$ISSUE_NUMBER"
+			local detail="The issue may not exist or may not be accessible"
+			local func="${FUNCNAME[0]}"
+			if [ "$JSON_OUTPUT" = true ]; then
+				print_error_json "$msg" "$detail" "ISSUE_NOT_FOUND" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			else
+				print_error_block "$msg" "$detail" "ISSUE_NOT_FOUND" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			fi
+			exit 1
+		fi
+
+		# Wrap single issue in array for consistent processing
+		issues_json="[$issues_json]"
+		total_all_issues=1
+		total_issues=1
+	else
+		# Fetch open issues using the fetch-issues script
+		log_debug_stderr "Fetching open issues from $REPO"
+		local fetch_args=(
+			"-r" "$REPO"
+			"--state" "open"
+			"--json"
+		)
+
+		# Add debug flag if present
+		if [ -n "$DEBUG_LEVEL" ]; then
+			fetch_args+=("--debug" "$DEBUG_LEVEL")
+		fi
+
+		# Add log file if present
+		if [ -n "$LOG_FILE" ]; then
+			fetch_args+=("--log" "$LOG_FILE")
+		fi
+
+		local issues_response
+		if ! issues_response=$("$FETCH_ISSUES_SCRIPT" "${fetch_args[@]}"); then
+			log_error_stderr "Failed to fetch issues"
+			local msg="Error: Failed to fetch open issues"
+			local detail="The fetch-issues script failed to retrieve issues from $REPO"
+			local func="${FUNCNAME[0]}"
+			if [ "$JSON_OUTPUT" = true ]; then
+				print_error_json "$msg" "$detail" "FETCH_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			else
+				print_error_block "$msg" "$detail" "FETCH_FAILED" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			fi
+			exit 1
+		fi
+
+		# Extract the issues array from the response
+		local all_issues_json
+		if ! all_issues_json=$(echo "$issues_response" | jq -r '.detail' 2> /dev/null); then
+			log_error_stderr "Failed to parse issues response"
+			local msg="Error: Invalid response format from fetch-issues script"
+			local detail="Could not extract issues data from the response"
+			local func="${FUNCNAME[0]}"
+			if [ "$JSON_OUTPUT" = true ]; then
+				print_error_json "$msg" "$detail" "PARSE_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			else
+				print_error_block "$msg" "$detail" "PARSE_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			fi
+			exit 1
+		fi
+
+		# Filter out issues with excluded labels
+		log_debug_stderr "Filtering out issues with excluded labels: '$EXCLUDE_LABELS'"
+		local filter_expression
+		filter_expression=$(build_exclude_filter "$EXCLUDE_LABELS")
+
+		if ! issues_json=$(echo "$all_issues_json" | jq "$filter_expression" 2> /dev/null); then
+			log_error_stderr "Failed to filter issues"
+			local msg="Error: Failed to filter issues by labels"
+			local detail="Could not filter out issues with excluded labels: '$EXCLUDE_LABELS'"
+			local func="${FUNCNAME[0]}"
+			if [ "$JSON_OUTPUT" = true ]; then
+				print_error_json "$msg" "$detail" "FILTER_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			else
+				print_error_block "$msg" "$detail" "FILTER_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			fi
+			exit 1
+		fi
+
+		# Count total issues after filtering
+		if ! total_all_issues=$(echo "$all_issues_json" | jq length 2> /dev/null) || ! total_issues=$(echo "$issues_json" | jq length 2> /dev/null); then
+			log_error_stderr "Failed to count issues"
+			local msg="Error: Could not count issues"
+			local detail="Issues data is not in expected array format"
+			local func="${FUNCNAME[0]}"
+			if [ "$JSON_OUTPUT" = true ]; then
+				print_error_json "$msg" "$detail" "COUNT_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			else
+				print_error_block "$msg" "$detail" "COUNT_ERROR" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			fi
+			exit 1
+		fi
+
+		local filtered_count=$((total_all_issues - total_issues))
+		log_info_stderr "Found $total_all_issues open issues, filtered out $filtered_count with excluded labels"
+		log_info_stderr "Processing $total_issues eligible issues"
+	fi
 
 	if [ "$total_issues" -eq 0 ]; then
 		local msg="No eligible issues found"
 		local excluded_labels_msg=""
-		if [ -n "$EXCLUDE_LABELS" ]; then
+		if [ -z "$ISSUE_NUMBER" ] && [ -n "$EXCLUDE_LABELS" ]; then
 			excluded_labels_msg=" after filtering out issues with labels: '$EXCLUDE_LABELS'"
 		fi
 		local detail="No open issues found in repository $REPO$excluded_labels_msg"
@@ -581,7 +677,7 @@ create-branches() {
 
 	# Prepare exclude labels array for JSON
 	local exclude_labels_array="[]"
-	if [ -n "$EXCLUDE_LABELS" ]; then
+	if [ -z "$ISSUE_NUMBER" ] && [ -n "$EXCLUDE_LABELS" ]; then
 		local IFS=','
 		read -ra labels_array <<< "$EXCLUDE_LABELS"
 		local cleaned_labels=()
@@ -598,49 +694,89 @@ create-branches() {
 	fi
 
 	local summary_json
-	summary_json=$(jq -n \
-		--argjson total_all "$total_all_issues" \
-		--argjson total_eligible "$total_issues" \
-		--argjson filtered_out "$filtered_count" \
-		--argjson created "$created_count" \
-		--argjson skipped "$skipped_count" \
-		--argjson failed "$failed_count" \
-		--argjson created_branches "$(printf '%s\n' "${created_branches[@]}" | jq -R . | jq -s .)" \
-		--argjson skipped_branches "$(printf '%s\n' "${skipped_branches[@]}" | jq -R . | jq -s .)" \
-		--argjson failed_branches "$(printf '%s\n' "${failed_branches[@]}" | jq -R . | jq -s .)" \
-		--arg repo "$REPO" \
-		--arg base_branch "$BASE_BRANCH" \
-		--argjson exclude_labels "$exclude_labels_array" \
-		--argjson dry_run "$DRY_RUN" \
-		'{
-			repository: $repo,
-			base_branch: $base_branch,
-			dry_run: $dry_run,
-			filtering: {
-				total_open_issues: $total_all,
-				filtered_out_count: $filtered_out,
-				eligible_issues: $total_eligible,
-				excluded_labels: $exclude_labels
-			},
-			summary: {
-				total_issues: $total_eligible,
-				created_branches: $created,
-				skipped_branches: $skipped,
-				failed_branches: $failed
-			},
-			branches: {
-				created: $created_branches,
-				skipped: $skipped_branches,
-				failed: $failed_branches
-			}
-		}')
+	if [ -n "$ISSUE_NUMBER" ]; then
+		# Summary for specific issue
+		summary_json=$(jq -n \
+			--argjson created "$created_count" \
+			--argjson skipped "$skipped_count" \
+			--argjson failed "$failed_count" \
+			--argjson created_branches "$(printf '%s\n' "${created_branches[@]}" | jq -R . | jq -s .)" \
+			--argjson skipped_branches "$(printf '%s\n' "${skipped_branches[@]}" | jq -R . | jq -s .)" \
+			--argjson failed_branches "$(printf '%s\n' "${failed_branches[@]}" | jq -R . | jq -s .)" \
+			--arg repo "$REPO" \
+			--argjson issue_number "$ISSUE_NUMBER" \
+			--arg base_branch "$BASE_BRANCH" \
+			--argjson dry_run "$DRY_RUN" \
+			'{
+                repository: $repo,
+                issue_number: $issue_number,
+                base_branch: $base_branch,
+                dry_run: $dry_run,
+                summary: {
+                    created_branches: $created,
+                    skipped_branches: $skipped,
+                    failed_branches: $failed
+                },
+                branches: {
+                    created: $created_branches,
+                    skipped: $skipped_branches,
+                    failed: $failed_branches
+                }
+            }')
+	else
+		# Summary for all issues
+		summary_json=$(jq -n \
+			--argjson total_all "$total_all_issues" \
+			--argjson total_eligible "$total_issues" \
+			--argjson filtered_out "$((total_all_issues - total_issues))" \
+			--argjson created "$created_count" \
+			--argjson skipped "$skipped_count" \
+			--argjson failed "$failed_count" \
+			--argjson created_branches "$(printf '%s\n' "${created_branches[@]}" | jq -R . | jq -s .)" \
+			--argjson skipped_branches "$(printf '%s\n' "${skipped_branches[@]}" | jq -R . | jq -s .)" \
+			--argjson failed_branches "$(printf '%s\n' "${failed_branches[@]}" | jq -R . | jq -s .)" \
+			--arg repo "$REPO" \
+			--arg base_branch "$BASE_BRANCH" \
+			--argjson exclude_labels "$exclude_labels_array" \
+			--argjson dry_run "$DRY_RUN" \
+			'{
+                repository: $repo,
+                base_branch: $base_branch,
+                dry_run: $dry_run,
+                filtering: {
+                    total_open_issues: $total_all,
+                    filtered_out_count: $filtered_out,
+                    eligible_issues: $total_eligible,
+                    excluded_labels: $exclude_labels
+                },
+                summary: {
+                    total_issues: $total_eligible,
+                    created_branches: $created,
+                    skipped_branches: $skipped,
+                    failed_branches: $failed
+                },
+                branches: {
+                    created: $created_branches,
+                    skipped: $skipped_branches,
+                    failed: $failed_branches
+                }
+            }')
+	fi
 
 	local success_status="OK"
 	local message
-	if [ "$DRY_RUN" = true ]; then
-		message="Dry run completed: would create $created_count branches from $total_issues eligible issues (filtered from $total_all_issues total)"
+	if [ -n "$ISSUE_NUMBER" ]; then
+		if [ "$DRY_RUN" = true ]; then
+			message="Dry run completed: would create branch for issue #$ISSUE_NUMBER"
+		else
+			message="Successfully processed issue #$ISSUE_NUMBER: created $created_count branches, skipped $skipped_count existing, failed $failed_count"
+		fi
 	else
-		message="Successfully processed $total_issues eligible issues: created $created_count branches, skipped $skipped_count existing, failed $failed_count"
+		if [ "$DRY_RUN" = true ]; then
+			message="Dry run completed: would create $created_count branches from $total_issues eligible issues (filtered from $total_all_issues total)"
+		else
+			message="Successfully processed $total_issues eligible issues: created $created_count branches, skipped $skipped_count existing, failed $failed_count"
+		fi
 	fi
 
 	log_debug_stderr "Preparing output in requested format"
@@ -668,7 +804,7 @@ main() {
 	init_script_logging "$DEBUG_LEVEL" "$LOG_FILE"
 
 	log_debug_stderr "Starting script with arguments: $*"
-	log_info_stderr "Parsed arguments - Repo: '$REPO', Base branch: '$BASE_BRANCH', Exclude labels: '$EXCLUDE_LABELS', Dry run: $DRY_RUN, JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}, Log file: ${LOG_FILE:-NONE}"
+	log_info_stderr "Parsed arguments - Repo: '$REPO', Issue: '${ISSUE_NUMBER:-ALL}', Base branch: '$BASE_BRANCH', Exclude labels: '$EXCLUDE_LABELS', Dry run: $DRY_RUN, JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}, Log file: ${LOG_FILE:-NONE}"
 
 	validate_args
 	log_debug_stderr "Argument validation completed successfully"
