@@ -1,0 +1,24 @@
+GH-XXXX: [Brief summary of changes in 50 characters or less]
+
+# Why is this change necessary? (Optional)
+# 
+
+# How does it address the issue? (Optional)
+# 
+
+# What side effects does this change have? (Optional)
+# 
+
+# ------------------------ >50 characters -------------------------
+# Remember:
+# - Use imperative mood: "Add feature" not "Added feature"
+# - Reference GitHub issue: GH-123
+# - Keep first line under 50 characters
+# - Leave blank line after summary
+# - Wrap body at 72 characters
+# - Focus on what and why, not how
+#
+# Examples:
+# GH-123: Add user authentication middleware
+# GH-456: Fix memory leak in data processing
+# GH-789: Update README with installation steps
