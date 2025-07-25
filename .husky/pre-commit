@@ -1,1 +1,3 @@
+#!/bin/bash
+./scripts/bash/lib/validate-branch-name.sh
 npm test
