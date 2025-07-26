@@ -9,10 +9,14 @@
 #
 # @triggers
 #   - Manual workflow dispatch only
-#   - Scans the entire repository workspace
+#   - Scans the entire repository workspace or specified target folder
+#
+# @inputs
+#   - target_folder: Folder to scan (default: force-app)
+#   - rule_selector: Rules to apply (cpd,eslint,flow,pmd,retire-js,regex,sfge,all)
 #
 # @jobs
-#   1. monitor-code-quality: Runs Salesforce Code Analyzer with ESLint, PMD, and Retire.js engines
+#   1. monitor-code-quality: Runs Salesforce Code Analyzer with configurable engines
 #
 # @requirements
 #   - Node.js >=20.9.0 and npm dependencies
@@ -37,6 +41,28 @@ name: 'Monitor: Code Quality'
 
 on:
   workflow_dispatch:
+    inputs:
+      target_folder:
+        description: 'Target folder to scan'
+        required: false
+        default: 'force-app'
+        type: string
+      rule_selector:
+        description: 'Rule selector to apply'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - cpd
+          - eslint
+          - flow
+          - pmd
+          - retire-js
+          - regex
+          - sfge
+
+run-name: 'Monitor Code Quality: ${{ github.event.inputs.target_folder }} with ${{ github.event.inputs.rule_selector }} rules'
 
 jobs:
   monitor-code-quality:
@@ -75,13 +101,41 @@ jobs:
       - name: Install Latest Salesforce Code Analyzer CLI Plugin
         run: sf plugins install code-analyzer@latest
 
+      - name: Validate Target Folder
+        run: |
+          TARGET_FOLDER="${{ github.event.inputs.target_folder }}"
+          if [ ! -d "$TARGET_FOLDER" ]; then
+            echo "❌ Target folder '$TARGET_FOLDER' does not exist"
+            echo "Available folders:"
+            find . -maxdepth 2 -type d -name "*" | grep -E "(force-app|src|classes|triggers)" | head -10
+            exit 1
+          fi
+          echo "✅ Target folder '$TARGET_FOLDER' exists"
+
       - name: Run Salesforce Code Analyzer
         id: run-code-analyzer
         uses: forcedotcom/run-code-analyzer@v2
         with:
-          run-arguments: --workspace . --view detail --output-file sfca_results.html --output-file sfca_results.json
-          results-artifact-name: code-quality-monitoring-results
-          github-token: ${{ github.token }}
+          run-arguments: >-
+            --workspace .
+            --target ${{ github.event.inputs.target_folder }}
+            --rule-selector ${{ github.event.inputs.rule_selector }}
+            --view detail
+            --output-file sfca_results.html
+            --output-file sfca_results.json
+          results-artifact-name: code-quality-monitoring-results-${{ github.event.inputs.target_folder }}-${{ github.event.inputs.rule_selector }}
+
+      - name: Display Scan Summary
+        if: always()
+        run: |
+          echo "## Code Quality Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Folder**: \`${{ github.event.inputs.target_folder }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Rule Selector**: \`${{ github.event.inputs.rule_selector }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Exit Code**: \`${{ steps.run-code-analyzer.outputs.exit-code }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Violations**: \`${{ steps.run-code-analyzer.outputs.num-violations }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Severity 1 Violations**: \`${{ steps.run-code-analyzer.outputs.num-sev1-violations }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Severity 2 Violations**: \`${{ steps.run-code-analyzer.outputs.num-sev2-violations }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Severity 3 Violations**: \`${{ steps.run-code-analyzer.outputs.num-sev3-violations }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Check the Outputs to Determine Whether to Fail
         if: |
