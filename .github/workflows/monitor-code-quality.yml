@@ -1,0 +1,98 @@
+# -----------------------------------------------------------------------------
+# @file .github/workflows/monitor-code-quality.yml
+# @brief GitHub Actions workflow for comprehensive code quality monitoring of the entire Salesforce repository.
+#
+# @description
+#   This workflow performs a full repository code quality analysis including 
+#   ESLint linting, PMD static analysis, and security vulnerability detection.
+#   Designed for comprehensive quality assessment and periodic code audits.
+#
+# @triggers
+#   - Manual workflow dispatch only
+#   - Scans the entire repository workspace
+#
+# @jobs
+#   1. monitor-code-quality: Runs Salesforce Code Analyzer with ESLint, PMD, and Retire.js engines
+#
+# @requirements
+#   - Node.js >=20.9.0 and npm dependencies
+#   - Java >=11 for PMD analysis
+#   - Python >=3.10 for additional tooling
+#   - Salesforce CLI with code-analyzer plugin
+#
+# @outputs
+#   - Comprehensive code scan results (HTML and JSON formats)
+#   - SARIF file automatically uploaded to GitHub Security tab
+#   - Detailed artifacts with full analysis results
+#
+# @exitcodes
+#   - Success: All code quality checks passed within acceptable thresholds
+#   - Failure: Code quality violations exceed defined thresholds
+#     * Any severity 1 or 2 violations
+#     * More than 10 total violations
+#     * Non-zero exit code from analyzer
+# -----------------------------------------------------------------------------
+#
+name: 'Monitor: Code Quality'
+
+on:
+  workflow_dispatch:
+
+jobs:
+  monitor-code-quality:
+    name: Monitor Code Quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Grants permission to check out the repository
+      actions: read # Grants permission to read the in-progress actions
+      security-events: write # Grants permission to upload SARIF results
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup NodeJS With npm Caching
+        uses: actions/setup-node@v4
+        with:
+          node-version: '>=20.9.0'
+          cache: 'npm'
+      
+      - name: Setup Java v11 or Later
+        uses: actions/setup-java@v4
+        with:
+          java-version: '>=11'
+          distribution: 'zulu'
+      
+      - name: Setup Python 3.10 or Later
+        uses: actions/setup-python@v5
+        with:
+          python-version: '>=3.10'
+
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
+      
+      - name: Install Latest Salesforce Code Analyzer CLI Plugin
+        run: sf plugins install code-analyzer@latest
+
+      - name: Run Salesforce Code Analyzer
+        id: run-code-analyzer
+        uses: forcedotcom/run-code-analyzer@v2
+        with:
+          run-arguments: --workspace . --view detail --output-file sfca_results.html --output-file sfca_results.json
+          results-artifact-name: code-quality-monitoring-results
+          github-token: ${{ github.token }}
+
+      - name: Check the Outputs to Determine Whether to Fail
+        if: |
+          steps.run-code-analyzer.outputs.exit-code > 0 ||
+          steps.run-code-analyzer.outputs.num-sev1-violations > 0 ||
+          steps.run-code-analyzer.outputs.num-sev2-violations > 0 ||
+          steps.run-code-analyzer.outputs.num-violations > 10
+        run: |
+          echo "❌ Code quality gate failed:"
+          echo "Exit code: ${{ steps.run-code-analyzer.outputs.exit-code }}"
+          echo "Severity 1 violations: ${{ steps.run-code-analyzer.outputs.num-sev1-violations }}"
+          echo "Severity 2 violations: ${{ steps.run-code-analyzer.outputs.num-sev2-violations }}"
+          echo "Total violations: ${{ steps.run-code-analyzer.outputs.num-violations }}"
+          exit 1
