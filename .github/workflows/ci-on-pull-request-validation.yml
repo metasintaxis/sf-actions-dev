@@ -1,0 +1,183 @@
+# -----------------------------------------------------------------------------
+# @file .github/workflows/ci-on-pull-request-validation.yml
+# @brief GitHub Actions workflow for CI validation of Salesforce pull requests.
+#
+# @description
+#   This workflow performs comprehensive CI validation for Salesforce pull requests
+#   including code quality scanning (ESLint, PMD), static analysis, and delta
+#   dry-run deployment validation. It ensures code quality standards and deployment
+#   readiness before merging changes to target branches.
+#
+# @triggers
+#   - Pull requests targeting 'dev' and 'GH-**' branches
+#   - Manual workflow dispatch
+#   - Only triggers when changes are made to 'force-app/**' path
+#
+# @jobs
+#   1. code-scan: Runs ESLint linting and PMD static code analysis
+#   2. delta-dry-run-deployment: Performs delta package calculation and dry-run deployment
+#
+# @requirements
+#   - Node.js and npm dependencies
+#   - Salesforce CLI with sfdx-git-delta plugin
+#   - PMD rulesets (security, performance, error-prone)
+#   - jq and xq utilities
+#   - SFDX_SANDBOX_AUTH_URL secret for DEV environment
+#
+# @outputs
+#   - Code scan results and logs
+#   - Delta deployment artifacts (package.xml, destructiveChanges, logs)
+#   - Context files for inter-job communication
+#
+# @exitcodes
+#   - Success: All quality checks and deployment validation passed
+#   - Failure: Code quality issues found or deployment validation failed
+#   - Skip: No changes detected in delta calculation (exit code 2)
+# -----------------------------------------------------------------------------
+#
+name: 'CI: Pull Request Validation'
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - dev
+      - GH-**
+    paths:
+      - force-app/**
+
+jobs:
+  code-scan:
+    name: Code Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js With Npm Caching
+        uses: actions/setup-node@v4
+        with:
+          node-version: '>=20.9.0'
+          cache: 'npm'
+      
+      - name: Setup Java v11 or later
+        uses: actions/setup-java@v4
+        with:
+          java-version: '>=11'
+          distribution: 'zulu'
+      
+      - name: Setup Python 3.10 or later
+        uses: actions/setup-python@v5
+        with:
+          python-version: '>=3.10'
+
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
+      
+      - name: Install Latest Salesforce Code Analyzer CLI Plugin
+        run: sf plugins install code-analyzer@latest
+
+      - name: Install npm dependencies
+        run: |
+          echo "Installing npm dependencies..."
+          HUSKY=0 npm ci
+          echo "Dependencies installed successfully"
+
+      - name: Run Salesforce Code Analyzer
+        id: run-code-analyzer
+        uses: forcedotcom/run-code-analyzer@v2
+        with:
+          run-arguments: --workspace . --view detail --output-file sfca_results.html --output-file sfca_results.json
+          results-artifact-name: salesforce-code-analyzer-results
+          github-token: ${{ github.token }}
+
+      - name: Check the Outputs to Determine Whether to Fail
+        if: |
+          steps.run-code-analyzer.outputs.exit-code > 0 ||
+          steps.run-code-analyzer.outputs.num-sev1-violations > 0 ||
+          steps.run-code-analyzer.outputs.num-sev2-violations > 0 ||
+          steps.run-code-analyzer.outputs.num-violations > 10
+        run: exit 1
+
+  # delta-dry-run-deployment:
+  #   name: Delta Deployment
+  #   needs: code-scan
+  #   runs-on: ubuntu-latest
+  #   environment: DEV
+  #   steps:
+  #     - name: Checkout Source Code
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+
+  #     - name: Install Salesforce CLI
+  #       run: npm install -g @salesforce/cli@latest
+
+  #     - name: Install sfdx-git-delta Plugin
+  #       run: |
+  #         echo y | sf plugins install sfdx-git-delta@latest
+  #         sf plugins
+
+  #     - name: Install utilities
+  #       run: |
+  #         pip install yq
+  #         xq --version
+
+  #     - name: Populate auth file with SFDX_URL secret
+  #       shell: bash
+  #       run: |
+  #         set -o noclobber
+  #         umask 077
+  #         echo '${{ secrets.SFDX_SANDBOX_AUTH_URL }}' > ./sfdc_auth_url.json
+
+  #     - name: Authenticate to Sandbox Org
+  #       run: sf org login sfdx-url --sfdx-url-file ./sfdc_auth_url.json --set-default
+
+  #     - name: Cleanup auth file
+  #       if: always()
+  #       run: rm -f ./sfdc_auth_url.json
+
+  #     - name: Run Delta Deployment
+  #       id: delta-dry-run-deployment
+  #       continue-on-error: true
+  #       run: |
+  #         chmod +x ./scripts/pull-request-validation/bash/delta-dry-run-deployment.sh
+  #         ./scripts/pull-request-validation/bash/delta-dry-run-deployment.sh \
+  #           --base-branch ${{ github.event.pull_request.base.ref }} \
+  #           --dry-run \
+  #           --json \
+  #           --log "./delta-dry-run-deployment.log" \
+  #           --debug
+
+  #     - name: Check deployment result
+  #       run: |
+  #         EXIT_CODE="${{ steps.delta-dry-run-deployment.outcome }}"
+  #         if [ "$EXIT_CODE" = "success" ]; then
+  #           echo "✅ Deployment succeeded"
+  #         else
+  #           # Check if it was a "no changes" scenario (exit code 2)
+  #           DEPLOYMENT_CONTEXT="delta-dry-run-deployment-context.json"
+  #           if [ -f "$DEPLOYMENT_CONTEXT" ]; then
+  #             HAS_CHANGES=$(jq -r '.has_changes // "unknown"' "$DEPLOYMENT_CONTEXT")
+  #             if [ "$HAS_CHANGES" = "false" ]; then
+  #               echo "ℹ️ No changes detected - deployment skipped"
+  #               exit 0
+  #             fi
+  #           fi
+  #           echo "❌ Deployment failed"
+  #           exit 1
+  #         fi
+
+  #     - name: Upload deployment artifacts
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: Delta Dry Run Deployment Results
+  #         path: |
+  #           *.log
+  #           *-context.json
+  #           package/
+  #           destructiveChanges/

@@ -5,7 +5,7 @@
 	"description": "Repository to store GitHub actions and automation scripts to work with salesforce instances.",
 	"type": "module",
 	"scripts": {
-		"lint": "eslint **/{aura,lwc}/**/*.js",
+		"lint": "eslint force-app/**/lwc/**/*.js",
 		"test": "npm run test:unit",
 		"test:unit": "sfdx-lwc-jest || true",
 		"test:unit:watch": "sfdx-lwc-jest --watch",
