@@ -62,7 +62,7 @@ on:
           - regex
           - sfge
 
-run-name: 'Monitor Code Quality: ${{ github.event.inputs.target_folder }} with ${{ github.event.inputs.rule_selector }} rules'
+run-name: 'Monitor - Code Quality: Running over ${{ github.event.inputs.target_folder }} with ${{ github.event.inputs.rule_selector }} rules'
 
 jobs:
   monitor-code-quality:
@@ -131,18 +131,6 @@ jobs:
             --output-file sfca_results.html
             --output-file sfca_results.json
           results-artifact-name: code-quality-monitoring-results-${{ github.event.inputs.target_folder }}-${{ github.event.inputs.rule_selector }}
-
-      - name: Display Scan Summary
-        if: always()
-        run: |
-          echo "## Code Quality Scan Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Target Folder**: \`${{ github.event.inputs.target_folder }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Rule Selector**: \`${{ github.event.inputs.rule_selector }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Exit Code**: \`${{ steps.run-code-analyzer.outputs.exit-code }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Total Violations**: \`${{ steps.run-code-analyzer.outputs.num-violations }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Severity 1 Violations**: \`${{ steps.run-code-analyzer.outputs.num-sev1-violations }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Severity 2 Violations**: \`${{ steps.run-code-analyzer.outputs.num-sev2-violations }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Severity 3 Violations**: \`${{ steps.run-code-analyzer.outputs.num-sev3-violations }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Check the Outputs to Determine Whether to Fail
         if: |
