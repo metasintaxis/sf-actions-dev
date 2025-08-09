@@ -1,0 +1,2 @@
+#!/bin/bash
+./scripts/bash/hooks/prepare-commit-msg.sh "$1" "$2" "$3"

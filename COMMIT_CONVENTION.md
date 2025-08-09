@@ -25,6 +25,7 @@ GH-XXXX: [Message]
 ### Good ✅
 
 ```text
+GH-80: Add commit message validation
 GH-123: Add user authentication feature
 GH-456: Fix login timeout issue
 GH-789: Update documentation for API endpoints
@@ -36,7 +37,7 @@ GH-888: Implement password reset functionality
 ### Bad ❌
 
 ```text
-GH123: missing colon and space
+GH80: missing colon and space
 gh-456: lowercase prefix
 GH-789 missing colon
 GH-321: fix bug (too vague)
@@ -70,7 +71,7 @@ GH-XXXX: [Brief summary of changes in 50 characters or less]
 # - Focus on what and why, not how
 #
 # Examples:
-# GH-123: Add user authentication middleware
+# GH-80: Add commit message validation
 # GH-456: Fix memory leak in data processing
 # GH-789: Update README with installation steps
 ```
