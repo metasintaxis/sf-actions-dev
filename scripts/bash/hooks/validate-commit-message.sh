@@ -9,7 +9,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Get the commit message file
 COMMIT_MSG_FILE="$1"
 
 if [ ! -f "$COMMIT_MSG_FILE" ]; then
@@ -17,7 +16,6 @@ if [ ! -f "$COMMIT_MSG_FILE" ]; then
 	exit 1
 fi
 
-# Read the commit message (first line only)
 COMMIT_MSG=$(head -n 1 "$COMMIT_MSG_FILE")
 
 # Skip validation for merge commits
@@ -26,12 +24,9 @@ if [[ $COMMIT_MSG =~ ^Merge\ (branch|pull\ request) ]]; then
 	exit 0
 fi
 
-# Define the pattern for GH-XXXX: Message format
-# Format: GH-[number]: [Message]
-# Examples: GH-123: Add user authentication feature, GH-456: Fix login timeout issue
+# Pattern: GH-XXXX: Message (where XXXX is any number)
 PATTERN="^GH-[0-9]+: [A-Z].{1,}$"
 
-# Check if commit message matches the pattern
 if [[ $COMMIT_MSG =~ $PATTERN ]]; then
 	echo -e "${GREEN}✓ Commit message format is valid${NC}"
 	exit 0
@@ -43,10 +38,11 @@ else
 	echo "Expected format: GH-XXXX: [Message]"
 	echo ""
 	echo "Where:"
-	echo "  GH-XXXX   = GitHub issue number (e.g., GH-123)"
+	echo "  GH-XXXX   = GitHub issue number (e.g., GH-80, GH-123; XXXX is any number)"
 	echo "  Message   = Brief description, starts with a capital letter"
 	echo ""
 	echo "Good examples:"
+	echo "  GH-80: Add commit message validation"
 	echo "  GH-123: Add user authentication feature"
 	echo "  GH-456: Fix login timeout issue"
 	echo "  GH-789: Update documentation for API endpoints"
@@ -55,7 +51,7 @@ else
 	echo "  GH-888: Implement password reset functionality"
 	echo ""
 	echo "Bad examples:"
-	echo "  GH123: missing colon and space"
+	echo "  GH80: missing colon and space"
 	echo "  gh-456: lowercase prefix"
 	echo "  GH-789 missing colon"
 	echo "  GH-321: fix bug (too vague)"
