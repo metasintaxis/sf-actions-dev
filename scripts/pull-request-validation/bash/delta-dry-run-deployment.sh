@@ -30,8 +30,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/output-utils.sh"
-source "${SCRIPT_DIR}/../lib/logging/watts/logging.sh"
+source "${SCRIPT_DIR}/../../bash/lib/output-utils.sh"
+source "${SCRIPT_DIR}/../../bash/lib/logging/watts/logging.sh"
 
 # Global variables
 BASE_BRANCH=""
