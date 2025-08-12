@@ -331,7 +331,13 @@ generate_summary() {
     save_context "deployment_timestamp" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     
     if [ "$JSON_OUTPUT" = true ]; then
-        print_standard_json "OK" "Deployment succeeded" "{\"deployment_id\": \"$deploy_id\", \"status\": \"$final_status\", \"dry_run\": $DRY_RUN}"
+        local json_data
+        json_data=$(jq -n --arg deployment_id "$deploy_id" --arg status "$final_status" --argjson dry_run "$DRY_RUN" '{
+            deployment_id: $deployment_id,
+            status: $status,
+            dry_run: $dry_run
+        }')
+        print_standard_json "OK" "Deployment succeeded" "$json_data"
     else
         local deployment_type="deployment"
         if [ "$DRY_RUN" = true ]; then
@@ -340,6 +346,7 @@ generate_summary() {
         print_standard_block "OK" "Delta $deployment_type succeeded" "Deployment ID: $deploy_id"
     fi
 }
+
 
 main() {
     parse_args "$@"
