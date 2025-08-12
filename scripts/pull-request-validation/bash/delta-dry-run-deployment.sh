@@ -149,6 +149,9 @@ determine_from_branch() {
         dev|devops/actions-test)
             from_branch="origin/$from_branch"
             ;;
+        GH-[0-9]*)
+            from_branch="origin/$from_branch"
+            ;;
         *)
             log_error_stderr "Unsupported base branch: $from_branch"
             if [ "$JSON_OUTPUT" = true ]; then
@@ -168,7 +171,10 @@ calculate_delta_changes() {
     
     log_info_stderr "Calculating delta changes from $from_branch to HEAD"
     
-    if ! sf sgd source delta --to "HEAD" --from "$from_branch" --output "." -i .forceignore; then
+    # Create delta-sources directory if it doesn't exist
+    mkdir -p delta-sources
+    
+    if ! sf sgd source delta --to "HEAD" --from "$from_branch" --output-dir "delta-sources" --generate-delta -i .forceignore; then
         log_error_stderr "Failed to calculate delta changes"
         if [ "$JSON_OUTPUT" = true ]; then
             print_error_json "Failed to calculate delta changes" "" "DELTA_CALCULATION_FAILED" "${LINENO[0]}" "${BASH_SOURCE[0]}" "${FUNCNAME[0]}"
@@ -176,9 +182,9 @@ calculate_delta_changes() {
         exit 1
     fi
     
-    # Check if there are changes
-    if [ ! -f package/package.xml ] || [ ! -s package/package.xml ]; then
-        log_info_stderr "No changes detected in package.xml"
+    # Check if there are changes by examining the delta-sources directory
+    if [ ! -d "delta-sources" ] || [ -z "$(find delta-sources -name "*.cls" -o -name "*.trigger" -o -name "*.component" -o -name "*.page" -o -name "*.xml" 2>/dev/null)" ]; then
+        log_info_stderr "No changes detected in delta-sources directory"
         save_context "has_changes" "false"
         save_context "deployment_status" "skipped"
         
@@ -193,37 +199,34 @@ calculate_delta_changes() {
     save_context "has_changes" "true"
     log_info_stderr "Changes detected, proceeding with deployment analysis"
     
-    # Log the package.xml content for debugging
-    log_debug_stderr "Generated package.xml content:"
+    # Log the delta-sources content for debugging
+    log_debug_stderr "Generated delta-sources directory content:"
     if [ "${DEBUG_LEVEL:-}" = "DEBUG" ]; then
-        cat package/package.xml >&2
+        find delta-sources -type f -name "*.cls" -o -name "*.trigger" -o -name "*.component" -o -name "*.page" -o -name "*.xml" | head -20 >&2
     fi
 }
 
 extract_apex_test_classes() {
     local apex_classes=""
     
-    if ! command -v xq >/dev/null 2>&1; then
-        log_warn_stderr "xq utility not found, skipping specific test class extraction"
+    log_info_stderr "Extracting Apex test classes from delta-sources directory"
+    
+    # Find all Apex class files in delta-sources and extract class names
+    local class_files
+    class_files=$(find delta-sources -name "*.cls" -type f 2>/dev/null || echo "")
+    
+    if [ -z "$class_files" ]; then
+        log_info_stderr "No Apex classes found in delta-sources"
         save_context "apex_classes" ""
         return 0
     fi
     
-    log_info_stderr "Extracting Apex test classes from package.xml"
-    
-    apex_classes=$(xq . < package/package.xml | jq -r '
-        .Package.types
-        | [.]
-        | flatten
-        | map(select(.name=="ApexClass"))
-        | .[].members
-        | [.]
-        | flatten
-        | map(select(. | index("*") | not))
-        | unique
-        | map("--tests " + .)
-        | join(" ")
-    ' 2>/dev/null || echo "")
+    # Extract class names from file paths and build test command
+    apex_classes=$(echo "$class_files" | while read -r class_file; do
+        if [ -f "$class_file" ]; then
+            basename "$class_file" .cls
+        fi
+    done | grep -v "^$" | sort -u | sed 's/^/--tests /' | tr '\n' ' ' | sed 's/ $//')
     
     save_context "apex_classes" "$apex_classes"
     
@@ -234,20 +237,21 @@ extract_apex_test_classes() {
     fi
 }
 
-run_deployment() {
+run_dry_run_deployment() {
     local apex_classes="$1"
     
     log_info_stderr "Starting delta deployment (dry-run: $DRY_RUN)"
     
-    # Build deployment command
-    local deploy_cmd="sf project deploy start --manifest package/package.xml --async --ignore-warnings"
+    # Build deployment command using source-dir instead of manifest
+    local deploy_cmd="sf project deploy start --source-dir delta-sources --async --ignore-warnings"
     
     if [ "$DRY_RUN" = true ]; then
         deploy_cmd="$deploy_cmd --dry-run"
     fi
     
-    if [ -f destructiveChanges/destructiveChanges.xml ]; then
-        deploy_cmd="$deploy_cmd --post-destructive-changes destructiveChanges/destructiveChanges.xml"
+    # Note: destructive changes handling may need to be adjusted based on how sfdx-git-delta generates them
+    if [ -f delta-sources/destructiveChanges.xml ]; then
+        deploy_cmd="$deploy_cmd --post-destructive-changes delta-sources/destructiveChanges.xml"
         log_debug_stderr "Including destructive changes"
     fi
     
@@ -356,7 +360,7 @@ main() {
     
     # Run deployment
     local deploy_id
-    deploy_id=$(run_deployment "$apex_classes")
+    deploy_id=$(run_dry_run_deployment "$apex_classes")
     
     # Wait for completion
     local final_status
