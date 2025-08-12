@@ -1,0 +1,90 @@
+name: 'CI: Dry-Run Deployment Validation on Pull Request'
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - dev
+      - GH-**
+    paths:
+      - force-app/**
+
+jobs:
+  delta-dry-run-deployment:
+    name: Delta Deployment Validation
+    runs-on: ubuntu-latest
+    environment: DEV
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install Salesforce CLI
+        run: npm install -g @salesforce/cli@latest
+
+      - name: Install sfdx-git-delta Plugin
+        run: |
+          echo y | sf plugins install sfdx-git-delta@latest
+          sf plugins
+
+      - name: Install utilities
+        run: |
+          pip install yq
+          xq --version
+
+      - name: Populate auth file with SFDX_URL secret
+        shell: bash
+        run: |
+          set -o noclobber
+          umask 077
+          echo '${{ secrets.SFDX_SANDBOX_AUTH_URL }}' > ./sfdc_auth_url.json
+
+      - name: Authenticate to Sandbox Org
+        run: sf org login sfdx-url --sfdx-url-file ./sfdc_auth_url.json --set-default
+
+      - name: Cleanup auth file
+        if: always()
+        run: rm -f ./sfdc_auth_url.json
+
+      - name: Run Delta Deployment
+        id: delta-dry-run-deployment
+        continue-on-error: true
+        run: |
+          chmod +x ./scripts/pull-request-validation/bash/delta-dry-run-deployment.sh
+          ./scripts/pull-request-validation/bash/delta-dry-run-deployment.sh \
+            --base-branch ${{ github.event.pull_request.base.ref }} \
+            --dry-run \
+            --json \
+            --log "./delta-dry-run-deployment.log" \
+            --debug
+
+      - name: Check deployment result
+        run: |
+          EXIT_CODE="${{ steps.delta-dry-run-deployment.outcome }}"
+          if [ "$EXIT_CODE" = "success" ]; then
+            echo "✅ Deployment validation succeeded"
+          else
+            DEPLOYMENT_CONTEXT="delta-dry-run-deployment-context.json"
+            if [ -f "$DEPLOYMENT_CONTEXT" ]; then
+              HAS_CHANGES=$(jq -r '.has_changes // "unknown"' "$DEPLOYMENT_CONTEXT")
+              if [ "$HAS_CHANGES" = "false" ]; then
+                echo "ℹ️ No changes detected - deployment skipped"
+                exit 0
+              fi
+            fi
+            echo "❌ Deployment validation failed"
+            exit 1
+          fi
+
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-validation-results
+          path: |
+            *.log
+            *-context.json
+            package/
+            destructiveChanges/
