@@ -15,7 +15,18 @@ jobs:
     name: Delta Deployment Validation
     runs-on: ubuntu-latest
     environment: DEV
+    # Add condition to check if workflow is enabled
+    if: vars.ENABLE_PR_DEPLOYMENT_VALIDATION != 'false'
     steps:
+      - name: Check if workflow is enabled
+        run: |
+          if [ "${{ vars.ENABLE_PR_DEPLOYMENT_VALIDATION }}" = "false" ]; then
+            echo "🔇 PR Deployment Validation is disabled via ENABLE_PR_DEPLOYMENT_VALIDATION variable"
+            exit 0
+          else
+            echo "✅ PR Deployment Validation is enabled"
+          fi
+
       - name: Checkout Source Code
         uses: actions/checkout@v5
         with:
