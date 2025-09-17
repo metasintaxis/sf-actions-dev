@@ -1,6 +1,7 @@
 #!/bin/bash
+
 # -----------------------------------------------------------------------------
-# @file scripts/bash/environments/determine-target-environment.sh
+# @file scripts/devops/bash/environments/determine-target-environment.sh
 # @brief Determines the target environment based on Git branch reference.
 #
 # @description

@@ -59,8 +59,8 @@ jobs:
       - name: Set environment
         id: set_env
         run: |
-          chmod +x ./scripts/bash/lib/determine-target-environment.sh
-          TARGET_ENV=$(./scripts/bash/lib/determine-target-environment.sh '${{ github.ref }}')
+          chmod +x ./scripts/devops/bash/lib/determine-target-environment.sh
+          TARGET_ENV=$(./scripts/devops/bash/lib/determine-target-environment.sh '${{ github.ref }}')
           echo "env=$TARGET_ENV" >> $GITHUB_OUTPUT
 
   find-dependencies:
