@@ -1,2 +1,7 @@
 #!/bin/bash
-./scripts/devops/bash/hooks/prepare-commit-msg.sh "$1" "$2" "$3"
+
+# Get the Git root directory to ensure absolute path resolution
+GIT_ROOT="$(git rev-parse --show-toplevel)"
+
+# Execute the prepare-commit-msg script with absolute path
+"${GIT_ROOT}/scripts/devops/bash/hooks/prepare-commit-msg.sh" "$1" "$2" "$3"
