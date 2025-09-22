@@ -366,6 +366,23 @@ sanitize_branch_name() {
 		| sed 's/^-\|-$//g'
 }
 
+# Function to convert array to JSON, handling empty arrays properly
+array_to_json() {
+	local array_name="$1"
+	
+	# Get array length using indirect reference
+	local array_length_var="${array_name}[@]"
+	local array_length
+	eval "array_length=\${#${array_name}[@]}"
+	
+	if [ "$array_length" -eq 0 ]; then
+		echo "[]"
+	else
+		# Use eval to expand the array
+		eval "printf '%s\\n' \"\${${array_name}[@]}\"" | jq -R . | jq -s .
+	fi
+}
+
 # Function to build jq filter for excluding labels
 build_exclude_filter() {
 	local exclude_labels="$1"
@@ -700,9 +717,9 @@ create-branches() {
 			--argjson created "$created_count" \
 			--argjson skipped "$skipped_count" \
 			--argjson failed "$failed_count" \
-			--argjson created_branches "$(printf '%s\n' "${created_branches[@]}" | jq -R . | jq -s .)" \
-			--argjson skipped_branches "$(printf '%s\n' "${skipped_branches[@]}" | jq -R . | jq -s .)" \
-			--argjson failed_branches "$(printf '%s\n' "${failed_branches[@]}" | jq -R . | jq -s .)" \
+			--argjson created_branches "$(array_to_json created_branches)" \
+			--argjson skipped_branches "$(array_to_json skipped_branches)" \
+			--argjson failed_branches "$(array_to_json failed_branches)" \
 			--arg repo "$REPO" \
 			--argjson issue_number "$ISSUE_NUMBER" \
 			--arg base_branch "$BASE_BRANCH" \
@@ -732,9 +749,9 @@ create-branches() {
 			--argjson created "$created_count" \
 			--argjson skipped "$skipped_count" \
 			--argjson failed "$failed_count" \
-			--argjson created_branches "$(printf '%s\n' "${created_branches[@]}" | jq -R . | jq -s .)" \
-			--argjson skipped_branches "$(printf '%s\n' "${skipped_branches[@]}" | jq -R . | jq -s .)" \
-			--argjson failed_branches "$(printf '%s\n' "${failed_branches[@]}" | jq -R . | jq -s .)" \
+			--argjson created_branches "$(array_to_json created_branches)" \
+			--argjson skipped_branches "$(array_to_json skipped_branches)" \
+			--argjson failed_branches "$(array_to_json failed_branches)" \
 			--arg repo "$REPO" \
 			--arg base_branch "$BASE_BRANCH" \
 			--argjson exclude_labels "$exclude_labels_array" \
