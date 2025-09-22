@@ -1,88 +1,432 @@
 #!/bin/bash
 
-# Validate that branch name and commit message issue number match
-# Usage: validate-branch-commit-consistency.sh <commit-msg-file>
+# -----------------------------------------------------------------------------
+# @file validate-branch-commit-consistency.sh
+# @brief Validate that branch name and commit message issue numbers match
+#
+# @description
+#   Git hook script that ensures the GitHub issue number in the branch name
+#   matches the issue number in the commit message. Enforces consistency
+#   between branch convention (GH-XXXX-descriptive-name) and commit convention
+#   (GH-XXXX: message). Skips validation for protected branches and merge commits.
+#
+# @usage
+#   ./validate-branch-commit-consistency.sh <commit-msg-file> [--json] [--log FILE] [--debug [LEVEL]]
+#   git commit -m "GH-123: Add feature"  # Validates branch GH-123-* matches commit GH-123:
+#
+# @options
+#   --json                Output result and errors in JSON format.
+#   --log FILE            Write debug and operational logs to specified file
+#   --debug [LEVEL]       Enable debug logging to stderr. Optional LEVEL:
+#                         DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY
+#                         (default: DEBUG if no level specified)
+#   -h, --help            Show this help message and exit.
+#
+# @exitcodes
+#   0  Success (issue numbers match or legitimately skipped)
+#   1  Invalid usage, missing arguments, or validation failure
+# -----------------------------------------------------------------------------
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+set -euo pipefail
 
-# Get the commit message file
-COMMIT_MSG_FILE="$1"
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../lib/output-utils.sh"
+source "${SCRIPT_DIR}/../lib/logging/watts/logging.sh"
 
-if [ ! -f "$COMMIT_MSG_FILE" ]; then
-	echo -e "${RED}Error: Commit message file not found: $COMMIT_MSG_FILE${NC}"
-	exit 1
-fi
+# Default values for arguments
+COMMIT_MSG_FILE=""
+JSON_OUTPUT=false
+DEBUG_LEVEL=""
+LOG_FILE=""
 
-# Read the commit message (first line only)
-COMMIT_MSG=$(head -n 1 "$COMMIT_MSG_FILE")
+show_usage() {
+	echo "Usage:"
+	echo "  $0 <commit-msg-file> [--json] [--log FILE] [--debug [LEVEL]]"
+	echo
+	echo "Arguments:"
+	echo "  commit-msg-file       Path to the commit message file"
+	echo
+	echo "Options:"
+	echo "  --json                Output result and errors in JSON format."
+	echo "  --log FILE            Write debug and operational logs to specified file"
+	echo "  --debug [LEVEL]       Enable debug logging to stderr. Optional LEVEL:"
+	echo "                        DEBUG, INFO, NOTICE, WARN, ERROR, CRITICAL, ALERT, EMERGENCY"
+	echo "                        (default: DEBUG if no level specified)"
+	echo "  -h, --help            Show this help message and exit."
+}
 
-# Get current branch name
-BRANCH_NAME=$(git branch --show-current)
+parse_args() {
+	COMMIT_MSG_FILE=""
+	JSON_OUTPUT=false
+	DEBUG_LEVEL=""
+	LOG_FILE=""
 
-# Skip validation for protected branches
-PROTECTED_BRANCHES=("main" "master" "develop" "staging" "production")
-for protected in "${PROTECTED_BRANCHES[@]}"; do
-	if [[ "$BRANCH_NAME" == "$protected" ]]; then
-		echo -e "${BLUE}ℹ Protected branch '$BRANCH_NAME' detected, skipping validation${NC}"
-		exit 0
+	local positional_args=()
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--json)
+				JSON_OUTPUT=true
+				shift
+				;;
+			--log)
+				LOG_FILE="$2"
+				shift 2
+				;;
+			--debug)
+				# Check if next argument is a log level or another flag/end of args
+				if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+					# Valid log levels - convert to uppercase using tr
+					local upper_level=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+					case "$upper_level" in
+						DEBUG | INFO | NOTICE | WARN | WARNING | ERROR | ERR | CRITICAL | CRIT | ALERT | EMERGENCY | EMERG | FATAL)
+							DEBUG_LEVEL="$2"
+							shift 2
+							;;
+						*)
+							# Not a valid log level, use default DEBUG
+							DEBUG_LEVEL="DEBUG"
+							shift
+							;;
+					esac
+				else
+					# No level specified, use default DEBUG
+					DEBUG_LEVEL="DEBUG"
+					shift
+				fi
+				;;
+			-h | --help)
+				show_usage
+				exit 0
+				;;
+			-*)
+				show_usage >&2
+				exit 1
+				;;
+			*)
+				positional_args+=("$1")
+				shift
+				;;
+		esac
+	done
+
+	# Set positional arguments
+	if [[ ${#positional_args[@]} -ge 1 ]]; then
+		COMMIT_MSG_FILE="${positional_args[0]}"
 	fi
-done
+}
 
-# Skip validation for merge commits
-if [[ $COMMIT_MSG =~ ^Merge\ (branch|pull\ request) ]]; then
-	echo -e "${BLUE}ℹ Merge commit detected, skipping validation${NC}"
-	exit 0
-fi
+check_dependencies() {
+	log_debug_stderr "Checking script dependencies"
 
-# Extract issue number from branch name (BRANCH_CONVENTION.md)
-# Expected: GH-XXXX-descriptive-name
-if [[ $BRANCH_NAME =~ ^GH-([0-9]+)-[a-z0-9-]+$ ]]; then
-	BRANCH_ISSUE="${BASH_REMATCH[1]}"
-else
-	echo -e "${RED}✗ Invalid branch name format!${NC}"
-	echo -e "${YELLOW}Branch name '$BRANCH_NAME' does not follow the expected format${NC}"
-	echo -e "${YELLOW}Expected: GH-XXXX-descriptive-name${NC}"
-	exit 1
-fi
+	# Check for git
+	if ! command -v git > /dev/null 2>&1; then
+		log_error_stderr "Missing dependency: git is not installed"
+		local msg="Error: git is required but not installed."
+		local detail="Install git to continue."
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "$detail" "MISSING_DEPENDENCY" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
+	log_debug_stderr "git dependency check passed"
+}
 
-# Extract issue number from commit message (COMMIT_CONVENTION.md)
-# Expected: GH-XXXX: Message
-if [[ $COMMIT_MSG =~ ^GH-([0-9]+):\ .*$ ]]; then
-	COMMIT_ISSUE="${BASH_REMATCH[1]}"
-else
-	echo -e "${RED}✗ Invalid commit message format!${NC}"
-	echo -e "${YELLOW}Commit message '$COMMIT_MSG' does not follow the expected format${NC}"
-	echo -e "${YELLOW}Expected: GH-XXXX: [Message]${NC}"
-	exit 1
-fi
+validate_args() {
+	log_debug_stderr "Validating required arguments"
+	if [ -z "$COMMIT_MSG_FILE" ]; then
+		log_error_stderr "Missing required argument: commit message file not specified"
+		local msg="Error: commit message file must be specified as first argument"
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "Provide path to commit message file" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "Provide path to commit message file" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
+	
+	if [ ! -f "$COMMIT_MSG_FILE" ]; then
+		log_error_stderr "Commit message file does not exist: $COMMIT_MSG_FILE"
+		local msg="Error: commit message file not found"
+		local detail="File: $COMMIT_MSG_FILE"
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "$detail" "FILE_NOT_FOUND" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "$detail" "FILE_NOT_FOUND" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
+	
+	log_debug_stderr "All required arguments are present and valid"
+}
 
-# Check if issue numbers match
-if [[ "$BRANCH_ISSUE" == "$COMMIT_ISSUE" ]]; then
-	echo -e "${GREEN}✓ Branch and commit issue numbers match: GH-$BRANCH_ISSUE${NC}"
-	exit 0
-else
-	echo -e "${RED}✗ Branch and commit issue numbers do not match!${NC}"
-	echo -e "${YELLOW}"
-	echo "Branch:  GH-$BRANCH_ISSUE (from: $BRANCH_NAME)"
-	echo "Commit:  GH-$COMMIT_ISSUE (from: $COMMIT_MSG)"
-	echo ""
-	echo "The GitHub issue number in your branch name must match your commit message."
-	echo ""
-	echo "Options to fix this:"
-	echo "1. Update your commit message to match the branch:"
-	echo "   GH-$BRANCH_ISSUE: [Your message]"
-	echo ""
-	echo "2. Or rename your branch to match the commit:"
-	echo "   git branch -m GH-$COMMIT_ISSUE-descriptive-name"
-	echo ""
-	echo "Example of matching branch and commit:"
-	echo "   Branch:  GH-80-husky-hook-commit-message-should-match-branch-name"
-	echo "   Commit:  GH-80: Add commit message validation"
-	echo -e "${NC}"
-	exit 1
-fi
+# Function to initialize logging based on environment and arguments
+init_script_logging() {
+	local debug_level="$1"
+	local log_file="$2"
+
+	# Determine the effective debug level
+	local effective_level=""
+
+	# Build logger initialization arguments
+	local logger_args=()
+
+	if [ "${ACTIONS_STEP_DEBUG:-false}" = "true" ]; then
+		# GitHub Actions debug mode takes precedence
+		effective_level="${debug_level:-DEBUG}"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		# Initialize logger first, then log
+		init_logger "${logger_args[@]}"
+		log_info_stderr "GitHub Actions step debug mode detected"
+		log_debug_stderr "Debug mode enabled with level: $effective_level"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	elif [ -n "$debug_level" ]; then
+		# Manual debug flag provided
+		effective_level="$debug_level"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		# Initialize logger first, then log
+		init_logger "${logger_args[@]}"
+		log_debug_stderr "Debug mode enabled with level: $effective_level"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	else
+		# Default level
+		effective_level="INFO"
+		logger_args+=(--level "$effective_level")
+
+		# Add log file if specified
+		if [ -n "$log_file" ]; then
+			logger_args+=(--log "$log_file")
+		fi
+
+		init_logger "${logger_args[@]}"
+		if [ -n "$log_file" ]; then
+			log_info_stderr "Logging to file: $log_file"
+		fi
+	fi
+
+	log_debug_stderr "Logger initialized with level: $effective_level"
+}
+
+# Pure function to extract first line of commit message
+get_commit_message_first_line() {
+	local commit_msg_file="$1"
+	head -n 1 "$commit_msg_file" 2>/dev/null || echo ""
+}
+
+# Pure function to get current branch name
+get_current_branch() {
+	git branch --show-current 2>/dev/null || echo ""
+}
+
+# Pure function to check if branch is protected
+is_protected_branch() {
+	local branch_name="$1"
+	local protected_branches=("main" "master" "develop" "staging" "production")
+	
+	for protected in "${protected_branches[@]}"; do
+		if [[ "$branch_name" == "$protected" ]]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+# Pure function to check if message is a merge commit
+is_merge_commit() {
+	local commit_msg="$1"
+	[[ $commit_msg =~ ^Merge\ (branch|pull\ request) ]]
+}
+
+# Pure function to extract issue number from branch name
+extract_branch_issue_number() {
+	local branch_name="$1"
+	if [[ $branch_name =~ ^GH-([0-9]+)-[a-z0-9-]+$ ]]; then
+		echo "${BASH_REMATCH[1]}"
+	else
+		echo ""
+	fi
+}
+
+# Pure function to extract issue number from commit message
+extract_commit_issue_number() {
+	local commit_msg="$1"
+	if [[ $commit_msg =~ ^GH-([0-9]+):\ .*$ ]]; then
+		echo "${BASH_REMATCH[1]}"
+	else
+		echo ""
+	fi
+}
+
+# Function to generate consistency error details
+generate_consistency_error_detail() {
+	local branch_issue="$1"
+	local commit_issue="$2"
+	local branch_name="$3"
+	local commit_msg="$4"
+	
+	cat << EOF
+Branch:  GH-$branch_issue (from: $branch_name)
+Commit:  GH-$commit_issue (from: $commit_msg)
+
+The GitHub issue number in your branch name must match your commit message.
+
+Options to fix this:
+1. Update your commit message to match the branch:
+   GH-$branch_issue: [Your message]
+
+2. Or rename your branch to match the commit:
+   git branch -m GH-$commit_issue-descriptive-name
+
+Example of matching branch and commit:
+   Branch:  GH-80-husky-hook-commit-message-should-match-branch-name
+   Commit:  GH-80: Add commit message validation
+EOF
+}
+
+validate_branch_commit_consistency() {
+	log_info_stderr "Starting branch-commit consistency validation"
+	
+	# Extract data using pure functions
+	local commit_msg
+	commit_msg=$(get_commit_message_first_line "$COMMIT_MSG_FILE")
+	log_debug_stderr "Extracted commit message: '$commit_msg'"
+	
+	local branch_name
+	branch_name=$(get_current_branch)
+	log_debug_stderr "Current branch: '$branch_name'"
+	
+	# Check if we should skip validation for protected branches
+	if is_protected_branch "$branch_name"; then
+		log_info_stderr "Protected branch detected, skipping validation"
+		local msg="Protected branch detected, validation skipped"
+		local detail="Branch: '$branch_name', Protected branches: main, master, develop, staging, production"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_standard_json "OK" "$msg" "$detail"
+		else
+			print_standard_block "OK" "$msg" "$detail"
+		fi
+		return 0
+	fi
+	
+	# Check if it's a merge commit (skip validation)
+	if is_merge_commit "$commit_msg"; then
+		log_info_stderr "Merge commit detected, skipping validation"
+		local msg="Merge commit detected, validation skipped"
+		local detail="Message: '$commit_msg'"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_standard_json "OK" "$msg" "$detail"
+		else
+			print_standard_block "OK" "$msg" "$detail"
+		fi
+		return 0
+	fi
+	
+	# Extract issue numbers
+	local branch_issue
+	branch_issue=$(extract_branch_issue_number "$branch_name")
+	log_debug_stderr "Extracted branch issue number: '$branch_issue'"
+	
+	if [ -z "$branch_issue" ]; then
+		log_error_stderr "Invalid branch name format: '$branch_name'"
+		local msg="Invalid branch name format"
+		local detail="Branch name '$branch_name' does not follow the expected format GH-XXXX-descriptive-name"
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "$detail" "INVALID_BRANCH_FORMAT" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "$detail" "INVALID_BRANCH_FORMAT" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
+	
+	local commit_issue
+	commit_issue=$(extract_commit_issue_number "$commit_msg")
+	log_debug_stderr "Extracted commit issue number: '$commit_issue'"
+	
+	if [ -z "$commit_issue" ]; then
+		log_error_stderr "Invalid commit message format: '$commit_msg'"
+		local msg="Invalid commit message format"
+		local detail="Commit message '$commit_msg' does not follow the expected format GH-XXXX: [Message]"
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "$detail" "INVALID_COMMIT_FORMAT" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "$detail" "INVALID_COMMIT_FORMAT" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
+	
+	# Check if issue numbers match
+	if [[ "$branch_issue" == "$commit_issue" ]]; then
+		log_info_stderr "Branch and commit issue numbers match: GH-$branch_issue"
+		local msg="Branch and commit issue numbers match"
+		local detail="Issue number: GH-$branch_issue, Branch: '$branch_name', Commit: '$commit_msg'"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_standard_json "OK" "$msg" "$detail"
+		else
+			print_standard_block "OK" "$msg" "$detail"
+		fi
+		return 0
+	else
+		log_error_stderr "Branch and commit issue numbers do not match: branch GH-$branch_issue vs commit GH-$commit_issue"
+		local msg="Branch and commit issue numbers do not match"
+		local detail
+		detail=$(generate_consistency_error_detail "$branch_issue" "$commit_issue" "$branch_name" "$commit_msg")
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "$detail" "ISSUE_MISMATCH" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "$detail" "ISSUE_MISMATCH" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
+}
+
+main() {
+	if [ $# -eq 0 ]; then
+		show_usage
+		exit 1
+	fi
+
+	# Parse arguments first to check for debug flag
+	parse_args "$@"
+
+	# Initialize logging based on debug flag and log file
+	init_script_logging "$DEBUG_LEVEL" "$LOG_FILE"
+
+	log_debug_stderr "Starting script with arguments: $*"
+	log_info_stderr "Parsed arguments - Commit file: '$COMMIT_MSG_FILE', JSON output: $JSON_OUTPUT, Debug level: ${DEBUG_LEVEL:-NONE}, Log file: ${LOG_FILE:-NONE}"
+
+	validate_args
+	log_debug_stderr "Argument validation completed successfully"
+
+	check_dependencies
+	log_debug_stderr "Dependency checks completed successfully"
+
+	validate_branch_commit_consistency
+	log_debug_stderr "Script execution completed successfully"
+}
+
+main "$@"

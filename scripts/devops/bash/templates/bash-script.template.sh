@@ -206,7 +206,7 @@ init_script_logging() {
 	log_debug_stderr "Logger initialized with level: $effective_level"
 }
 
-main_logic() {
+MAIN_LOGIC() {
 	log_info_stderr "Executing main script logic"
 	log_debug_stderr "Processing example argument: '$EXAMPLE_ARG'"
 
@@ -249,7 +249,7 @@ main() {
 	check_dependencies
 	log_debug_stderr "Dependency checks completed successfully"
 
-	main_logic
+	MAIN_LOGIC
 	log_debug_stderr "Script execution completed successfully"
 }
 
