@@ -61,6 +61,11 @@ parse_args() {
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 			-x | --example)
+				if [[ $# -lt 2 || "$2" =~ ^- ]]; then
+					echo "Error: -x/--example requires a value" >&2
+					show_usage >&2
+					exit 1
+				fi
 				EXAMPLE_ARG="$2"
 				shift 2
 				;;
@@ -69,13 +74,16 @@ parse_args() {
 				shift
 				;;
 			--log)
+				if [[ $# -lt 2 || "$2" =~ ^- ]]; then
+					echo "Error: --log requires a file path" >&2
+					show_usage >&2
+					exit 1
+				fi
 				LOG_FILE="$2"
 				shift 2
 				;;
 			--debug)
-				# Check if next argument is a log level or another flag/end of args
 				if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
-					# Valid log levels - convert to uppercase using tr
 					local upper_level=$(echo "$2" | tr '[:lower:]' '[:upper:]')
 					case "$upper_level" in
 						DEBUG | INFO | NOTICE | WARN | WARNING | ERROR | ERR | CRITICAL | CRIT | ALERT | EMERGENCY | EMERG | FATAL)
@@ -83,13 +91,11 @@ parse_args() {
 							shift 2
 							;;
 						*)
-							# Not a valid log level, use default DEBUG
 							DEBUG_LEVEL="DEBUG"
 							shift
 							;;
 					esac
 				else
-					# No level specified, use default DEBUG
 					DEBUG_LEVEL="DEBUG"
 					shift
 				fi
@@ -99,11 +105,19 @@ parse_args() {
 				exit 0
 				;;
 			*)
+				echo "Error: Unknown option '$1'" >&2
 				show_usage >&2
 				exit 1
 				;;
 		esac
 	done
+
+	# Check that required arguments were provided
+	if [ -z "$EXAMPLE_ARG" ]; then
+		echo "Error: -x/--example is required" >&2
+		show_usage >&2
+		exit 1
+	fi
 }
 
 check_dependencies() {
@@ -128,19 +142,54 @@ check_dependencies() {
 }
 
 validate_args() {
-	log_debug_stderr "Validating required arguments"
-	if [ -z "$EXAMPLE_ARG" ]; then
-		log_error_stderr "Missing required argument: example argument not specified"
-		local msg="Error: example argument must be specified with -x/--example"
+	log_debug_stderr "Validating argument logic and constraints"
+
+	# Logical validation examples:
+
+	# Validate log file path (if provided)
+	if [ -n "$LOG_FILE" ]; then
+		local log_dir
+		log_dir=$(dirname "$LOG_FILE")
+		if [ ! -d "$log_dir" ] && ! mkdir -p "$log_dir" 2> /dev/null; then
+			log_error_stderr "Cannot create log directory: $log_dir"
+			local msg="Error: Cannot create log directory"
+			local func="${FUNCNAME[0]}"
+			if [ "$JSON_OUTPUT" = true ]; then
+				print_error_json "$msg" "Directory: $log_dir" "INVALID_LOG_PATH" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			else
+				print_error_block "$msg" "Directory: $log_dir" "INVALID_LOG_PATH" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			fi
+			exit 1
+		fi
+	fi
+
+	# Validate example argument format/content
+	if [[ "$EXAMPLE_ARG" =~ [^a-zA-Z0-9_-] ]]; then
+		log_error_stderr "Example argument contains invalid characters: $EXAMPLE_ARG"
+		local msg="Error: Example argument must contain only alphanumeric characters, hyphens, and underscores"
 		local func="${FUNCNAME[0]}"
 		if [ "$JSON_OUTPUT" = true ]; then
-			print_error_json "$msg" "Use -x/--example" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			print_error_json "$msg" "Provided: $EXAMPLE_ARG" "INVALID_FORMAT" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		else
-			print_error_block "$msg" "Use -x/--example" "MISSING_ARGUMENTS" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+			print_error_block "$msg" "Provided: $EXAMPLE_ARG" "INVALID_FORMAT" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
 		fi
 		exit 1
 	fi
-	log_debug_stderr "All required arguments are present"
+
+	# Example: Validate example argument length
+	if [ ${#EXAMPLE_ARG} -gt 50 ]; then
+		log_error_stderr "Example argument too long: ${#EXAMPLE_ARG} characters (max 50)"
+		local msg="Error: Example argument is too long"
+		local func="${FUNCNAME[0]}"
+		if [ "$JSON_OUTPUT" = true ]; then
+			print_error_json "$msg" "Length: ${#EXAMPLE_ARG}/50 max" "INVALID_LENGTH" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		else
+			print_error_block "$msg" "Length: ${#EXAMPLE_ARG}/50 max" "INVALID_LENGTH" "${LINENO}" "${BASH_SOURCE[0]}" "$func"
+		fi
+		exit 1
+	fi
+
+	log_debug_stderr "All argument validations passed"
 }
 
 # Function to initialize logging based on environment and arguments
